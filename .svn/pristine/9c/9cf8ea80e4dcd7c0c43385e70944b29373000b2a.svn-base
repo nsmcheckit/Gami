@@ -1,0 +1,454 @@
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using System.Xml;
+using UnityEditor;
+using UnityEngine;
+
+public class DeleteBnkWem : EditorWindow
+{
+    private Dictionary<string, List<string>> allPfbnksForDelete = new Dictionary<string, List<string>>();
+    private Dictionary<string, List<string>> allPfWemsForDelete = new Dictionary<string, List<string>>();
+
+    [MenuItem("GAMI/资源管理/废弃bnk,wem清理")]
+    public static void ShowWindow()
+    {
+        DeleteBnkWem ep = ScriptableWizard.CreateInstance<DeleteBnkWem>();
+        ep.titleContent = new GUIContent("删除废弃.bnk及.wem");
+        ep.Show();
+    }
+
+    void Awake()
+    {
+        SearchAllPlatformsAbandonBnkFiles();
+        SearchAllPlatformsAbandonStreamFiles();
+    }
+
+
+    Vector2 vScroll = new Vector2();
+
+    public void OnGUI()
+    {
+        vScroll = EditorGUILayout.BeginScrollView(vScroll);
+        EditorGUILayout.BeginVertical();
+        EditorGUILayout.Separator();
+
+        using (new EditorGUILayout.HorizontalScope("box"))
+        {
+            #region    流媒体
+            using (new EditorGUILayout.VerticalScope("box"))
+            {
+                EditorGUILayout.BeginVertical();
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button("检测冗余Stream"))
+                {
+                    SearchAllPlatformsAbandonStreamFiles();
+                    if (allPfWemsForDelete.Count == 0)
+                    {
+                        this.ShowNotification(new GUIContent("未检测到冗余Stream"));
+                    }
+
+                }
+
+                if (GUILayout.Button("本地删除,并提交SVN"))
+                {
+                    if (DeleteWwiseStreamFiles(allPfWemsForDelete))
+                    {
+                        if (EditorUtility.DisplayDialog(".wem清理已完成！", "是否打开SVN提交窗口？", "是", "否"))
+                        {
+                            //SVNCallFunction("commit", Application.dataPath.Replace("/Assets", "/") + "Wwise Project/GeneratedSoundBanks");
+                        }
+                    }
+                    SearchAllPlatformsAbandonStreamFiles();//刷新一下，不再显示在面板上
+                }
+
+                EditorGUILayout.EndHorizontal();
+
+                //显示废弃流媒体
+                using (new EditorGUILayout.HorizontalScope("box")) 
+                {
+                    foreach (var pair in allPfWemsForDelete)
+                    {
+                        string pl = pair.Key;
+                        List<string> wems = pair.Value;
+                        using (new EditorGUILayout.VerticalScope("box"))
+                        {
+                            EditorGUILayout.LabelField(pl + ":" + wems.Count.ToString() + "个");
+                            ShowStreamFiles(wems);
+                        }
+                    }
+                }
+
+                EditorGUILayout.EndVertical();
+            }
+            #endregion
+
+            #region bnk
+            using (new EditorGUILayout.VerticalScope("box"))
+            {
+                EditorGUILayout.BeginVertical();
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button("检测冗余Bnk"))
+                {
+                    SearchAllPlatformsAbandonBnkFiles();
+                    if (allPfbnksForDelete.Count == 0)
+                    {
+                        this.ShowNotification(new GUIContent("未检测到冗余bnk"));
+                    }
+                }
+
+                if (GUILayout.Button("本地删除,并提交SVN"))
+                {
+                    if (DeleteWwiseBnkFiles(allPfbnksForDelete))
+                    {
+                        if (EditorUtility.DisplayDialog(".bnk清理已完成！", "是否打开SVN提交窗口？", "是", "否"))
+                        {
+                            //SVNCallFunction("commit", Application.dataPath.Replace("/Assets", "/") + "Wwise Project/GeneratedSoundBanks");
+                        }
+                    }
+                    SearchAllPlatformsAbandonBnkFiles();//刷新一下，不再显示在面板上
+
+                    EditorGUILayout.EndHorizontal();
+                }
+                EditorGUILayout.EndHorizontal();
+
+
+                //显示废弃Bnk
+                using (new EditorGUILayout.HorizontalScope("box")) 
+                {
+                    foreach (var pair in allPfbnksForDelete)
+                    {
+                        string pl = pair.Key;
+                        List<string> bnks = pair.Value;
+                        using (new EditorGUILayout.VerticalScope("box"))
+                        {
+                            EditorGUILayout.LabelField(pl + ":" + bnks.Count.ToString() + "个");
+                            ShowBnkFiles(bnks);
+                        }
+                    }
+                }
+
+                EditorGUILayout.EndVertical();
+
+            }
+            #endregion
+        }
+
+
+        EditorGUILayout.EndVertical();
+        EditorGUILayout.EndScrollView();
+
+    }
+
+    /// <summary>
+    /// 检出所有平台的废弃stream文件
+    /// </summary>
+    public void SearchAllPlatformsAbandonStreamFiles() 
+    {
+        allPfWemsForDelete.Clear();
+        foreach (var pair in AkUtilities.PlatformMapping)
+        {
+            string pl = pair.Key;
+            List<string> wemsForDelete = SearchAbandonStreamFiles(pl);
+            allPfWemsForDelete.Add(pl, wemsForDelete);
+        }
+    
+    }
+
+    /// <summary>
+    /// 查找废弃wem，返回的是完整路径的列表
+    /// </summary>
+    public List<string> SearchAbandonStreamFiles(string platform)
+    {
+        List<string> res = new List<string>();
+        XmlDocument xd = new XmlDocument();
+        xd.Load(SoundToolsUtility.WwisePeojectDirectoryPath + "/GeneratedSoundBanks/" + platform + "/SoundbanksInfo.xml");
+       
+        XmlNode xnodeStream1 = xd.SelectSingleNode("//MediaFilesNotInAnyBank");
+        XmlNodeList streamListInXML1 = xnodeStream1.ChildNodes;
+        List<string> mediasNotInAnyBnk = new List<string>();
+
+        for (int i = 0; i < streamListInXML1.Count; i++)
+        {
+            string wemId = streamListInXML1[i].Attributes["Id"].Value;
+            mediasNotInAnyBnk.Add(wemId);
+            EditorUtility.DisplayProgressBar("MediaFilesNotInAnyBank检索中……", wemId, (float)i / streamListInXML1.Count);
+            if (i >= streamListInXML1.Count - 1) 
+            {
+                EditorUtility.ClearProgressBar();
+            }          
+        }
+
+        XmlNode xnodeStream2 = xd.SelectSingleNode("//StreamedFiles");
+        XmlNodeList streamListInXML2 = xnodeStream2.ChildNodes;
+        List<string> streamFiles = new List<string>();
+
+        for (int j = 0; j < streamListInXML2.Count; j++)
+        {
+            string wemId = streamListInXML2[j].Attributes["Id"].Value;
+            streamFiles.Add(wemId);
+            EditorUtility.DisplayProgressBar("StreamedFiles检索中……", wemId, (float)j / streamListInXML1.Count);
+            if (j >= streamListInXML1.Count - 1)
+            {
+                EditorUtility.ClearProgressBar();
+            }
+        }
+    
+        string[] streamLocalPath = Directory.GetFiles(SoundToolsUtility.WwisePeojectDirectoryPath + "/GeneratedSoundBanks/" + platform.ToString(), 
+            "*.wem", SearchOption.AllDirectories);
+
+        for (int ii = 0; ii < streamLocalPath.Length; ii++) 
+        {
+            string localPath = streamLocalPath[ii];
+            string name = Path.GetFileNameWithoutExtension(localPath);
+            if (!mediasNotInAnyBnk.Contains(name) && !streamFiles.Contains(name))
+            {
+                res.Add(localPath);
+            }
+
+            EditorUtility.DisplayProgressBar("wem差异比对中……", name, (float)ii / streamListInXML1.Count);
+            if (ii >= streamListInXML1.Count - 1)
+            {
+                EditorUtility.ClearProgressBar();
+            }
+        }
+        return res;
+
+    }
+
+    /// <summary>
+    /// 检出所有平台的废弃bnk文件
+    /// </summary>
+    public void SearchAllPlatformsAbandonBnkFiles() 
+    {
+        allPfbnksForDelete.Clear();
+        foreach (var pair in AkUtilities.PlatformMapping)
+        {
+            string pl = pair.Key;
+            List<string> bnksForDelete = SearchAbandonBnkFiles(pl);
+            allPfbnksForDelete.Add(pl, bnksForDelete);
+        }
+
+    }
+
+
+    /// <summary>
+    /// 检出某一个平台的废弃的bnk文件
+    /// </summary>
+    /// <param name="platform"></param>
+    /// <returns></returns>
+    public List<string> SearchAbandonBnkFiles(string platform)
+    {
+        List<string> res = new List<string>();
+        XmlDocument xd = new XmlDocument();
+        xd.Load(SoundToolsUtility.WwisePeojectDirectoryPath + "/GeneratedSoundBanks/" + platform + "/SoundbanksInfo.xml");
+        XmlNode xmlBnkSingleNode = xd.SelectSingleNode("//SoundBanks");
+        XmlNodeList xmlBnkList = xmlBnkSingleNode.ChildNodes;
+
+        List<string> bnkInnerTextList = new List<string>();
+
+        for (int i = 0; i < xmlBnkList.Count; i++)
+        {
+            string bnkName = xmlBnkList[i].SelectSingleNode("ShortName").InnerText;
+            bnkInnerTextList.Add(bnkName);
+
+            EditorUtility.DisplayProgressBar("xml文件bnk检索中……", bnkName, (float)i / xmlBnkList.Count);
+
+            if (i >= xmlBnkList.Count - 1)
+            {
+                EditorUtility.ClearProgressBar();
+            }
+
+        }
+
+        List<string> bnkPathInLocal = new List<string>();
+
+        Action<string> SearcBnkLocalNameList = (string suffix) =>
+        {
+            string[] filesPathArray = Directory.GetFiles(SoundToolsUtility.WwisePeojectDirectoryPath + "/GeneratedSoundBanks/" + platform.ToString(), 
+                "*" + suffix, SearchOption.AllDirectories);
+
+            for (int j = 0; j < filesPathArray.Length; j++)
+            {
+                bnkPathInLocal.Add(filesPathArray[j]);
+
+                EditorUtility.DisplayProgressBar("本地bank相关文件检索中……", filesPathArray[j], (float)j / xmlBnkList.Count);
+
+                if (j >= xmlBnkList.Count - 1)
+                {
+                    EditorUtility.ClearProgressBar();
+                }
+
+            }
+        };
+
+        SearcBnkLocalNameList.Invoke(".bnk");
+        SearcBnkLocalNameList.Invoke(".txt");
+        SearcBnkLocalNameList.Invoke(".json");
+        SearcBnkLocalNameList.Invoke(".xml");
+
+        for (int ii = 0; ii < bnkPathInLocal.Count; ii++)
+        {
+            string path = bnkPathInLocal[ii];
+            string name = Path.GetFileNameWithoutExtension(path);
+            if (name != "SoundbanksInfo" && name != "PluginInfo" && !bnkInnerTextList.Contains(name))
+            {
+                res.Add(path);
+            }
+            EditorUtility.DisplayProgressBar("bank差异比对中……", name, (float)ii / xmlBnkList.Count);
+            if (ii >= xmlBnkList.Count - 1)
+            {
+                EditorUtility.ClearProgressBar();
+            }
+
+        }
+
+        return res;
+
+    }
+
+    /// <summary>
+    /// 执行svn进程相关操作
+    /// </summary>
+    /// <param name="svnCtr"></param>
+    /// <param name="path"></param>
+    public void SVNCallFunction(string svnCtr, string path)
+    {
+
+        string c = "/c Tortoiseproc.exe /command:" + svnCtr + " /path:\"" + path + "\" closeonend 0";
+        //System.Diagnostics.ProcessStartInfo p = new System.Diagnostics.ProcessStartInfo("cmd.exe", c);
+        //p.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
+        //System.Diagnostics.Process pro = new System.Diagnostics.Process();
+        //pro.StartInfo = p;
+        //pro.Start();
+
+        //pro.Close();
+
+        var process = new System.Diagnostics.Process();
+        process.StartInfo.FileName = "cmd.exe";
+        process.StartInfo.UseShellExecute = false;
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.CreateNoWindow = true;
+        //process.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
+        process.StartInfo.Arguments = c;
+        process.Start();
+
+        process.WaitForExit();
+        process.Close();
+
+    }
+
+    /// <summary>
+    /// 删除相应平台检出得废弃stream文件
+    /// </summary>
+    /// <param name="platform"></param>
+    /// <param name="res"></param>
+    public bool DeleteWwiseStreamFiles(Dictionary<string, List<string>> allPlatFormWemsForDelete)
+    {
+        bool result = false;
+        foreach (var pair in allPlatFormWemsForDelete)
+        {
+            string pl = pair.Key;
+            List<string> eachPFWemsForDelete = pair.Value;
+
+            for (int i = 0; i < eachPFWemsForDelete.Count; i++)
+            {
+                if (File.Exists(eachPFWemsForDelete[i]))
+                {
+                    File.Delete(eachPFWemsForDelete[i]);
+                }
+                EditorUtility.DisplayProgressBar("删除废弃流媒体", pl + ":" + eachPFWemsForDelete[i], (float)i / eachPFWemsForDelete.Count);
+
+                if (i >= eachPFWemsForDelete.Count - 1)
+                {
+                    EditorUtility.ClearProgressBar();
+                    result = true;
+                }
+
+            }
+
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// 删除相应平台检出得废弃bnk文件
+    /// </summary>
+    /// <param name="platform"></param>
+    /// <param name="res"></param>
+    /// <returns></returns>
+    public bool DeleteWwiseBnkFiles(Dictionary<string, List<string>> allPlatFormBNKsForDelete)
+    {
+        bool res = false;
+        foreach (var pair in allPlatFormBNKsForDelete)
+        {
+            string pl = pair.Key;
+            List<string> eachPlbnkForDelete = pair.Value;
+            for (int i = 0; i < eachPlbnkForDelete.Count; i++)
+            {
+                if (File.Exists(eachPlbnkForDelete[i]))
+                {
+                    File.Delete(eachPlbnkForDelete[i]);
+                }
+                EditorUtility.DisplayProgressBar("删除废弃Bnk", pl + ":" + eachPlbnkForDelete[i], (float)i / eachPlbnkForDelete.Count);
+                if (i >= eachPlbnkForDelete.Count - 1)
+                {
+                    EditorUtility.ClearProgressBar();
+                    res = true;
+                }
+
+            }
+
+        }
+
+        return res;
+    }
+
+
+    public void ShowStreamFiles(List<string> wemPathForDelete)
+    {
+        foreach (string item in wemPathForDelete)
+        {
+            using (new EditorGUILayout.HorizontalScope("box"))
+            {
+                string wemName = Path.GetFileName(item);
+                if (GUILayout.Button(wemName, EditorStyles.label))
+                {
+                    EditorUtility.RevealInFinder(item);
+                }              
+            }
+        }
+
+    }
+
+
+
+    /// <summary>
+    /// 展示bnk相关得文件（bnk、txt、json、xml）
+    /// </summary>
+    /// <param name="platform"></param>
+    /// <param name="res"></param>
+    public void ShowBnkFiles(List<string> res)
+    {
+        foreach (string item in res)
+        {
+            using (new EditorGUILayout.VerticalScope("box"))
+            {
+                string name = Path.GetFileName(item);
+                if (GUILayout.Button(name, EditorStyles.label))
+                {
+                    EditorUtility.RevealInFinder(item);
+                }
+            }
+        }
+
+
+    }
+
+
+
+
+
+}

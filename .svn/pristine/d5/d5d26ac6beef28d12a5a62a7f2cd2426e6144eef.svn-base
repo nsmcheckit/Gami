@@ -1,0 +1,78 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using AK.Wwise;
+using System;
+
+namespace GAMI
+{
+    /// <summary>
+    /// 继承一层自己的AudioGameobject，不会动到wwise自己的集成代码。
+    /// 1、方便wwise的升级。
+    /// 2、方便后期在不动原始集成代码的情况下，扩展性能优化的逻辑
+    /// 3、扩展自己的逻辑，比如重写position或forward、up
+    /// </summary>
+    public class AudioGameObject : AkGameObj
+    {
+
+        public bool isUpdatePosition = true;
+
+        #region Override Audio Position &Forward Up
+     
+        public bool overridePosition = false;//重新定义声音position的更新，默认关闭，通常是用于listener的设置.
+
+        [UnityEngine.SerializeField] private Transform t_overridePosition_Transform;
+        public Transform OverridePosition_Transform 
+        {  
+            set { t_overridePosition_Transform = value; }    
+        }
+   
+        public bool overrideFowardUp = false;//重新定义声音forward、up的更新，默认关闭，通常是用于listener的设置.
+
+        [UnityEngine.SerializeField] private Transform t_overrideFowardUp_Transform;
+        public Transform OverrideFowardUp_Transform 
+        {
+            set { t_overrideFowardUp_Transform = value; }
+        }
+
+        #endregion
+        public override UnityEngine.Vector3 GetPosition()
+        {
+            if (overridePosition && t_overridePosition_Transform != null)
+            {
+                return t_overridePosition_Transform.position;
+            }
+            return base.GetPosition();  
+        }
+
+        public override Vector3 GetForward()
+        {
+            if (overrideFowardUp && t_overrideFowardUp_Transform != null) 
+            {
+                return t_overrideFowardUp_Transform.forward;
+            }
+            return base.GetForward();
+        }
+
+        public override Vector3 GetUpward()
+        {
+            if (overrideFowardUp && t_overrideFowardUp_Transform != null)
+            {
+                return t_overrideFowardUp_Transform.up;
+            }
+            return base.GetUpward();
+        }
+
+        private new void Update()
+        {
+            if (isUpdatePosition) 
+            {
+                base.Update();
+            }        
+        }
+
+    }
+
+}
+
+

@@ -1,0 +1,454 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEditor;
+
+
+[CustomEditor(typeof(GAMI.AmbientSound)),CanEditMultipleObjects]
+public class AmbientSoundInspector : Editor
+{
+    GAMI.AmbientSound ambientSound;
+
+    float radius = 0;
+    private void Awake()
+    {
+        ambientSound = this.target as GAMI.AmbientSound;
+        
+    }
+
+    private void OnEnable()
+    {
+        radius = GetEventAttenuationRadiusFromBankInfo(ambientSound.soundEvent);
+        
+    }
+
+
+    string buttonName = "Lock Inspector";
+    public override void OnInspectorGUI()
+    {
+        serializedObject.Update();
+        GUI.backgroundColor = ActiveEditorTracker.sharedTracker.isLocked ? Color.green : Color.red;
+        if (GUILayout.Button(buttonName))
+        {
+            LockInspector();
+        }
+        GUI.backgroundColor = Color.white;
+
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("soundEvent"));
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("positionType"));
+        var PosList = serializedObject.FindProperty("positionList");
+       
+        using (new UnityEngine.GUILayout.VerticalScope())
+        {
+            for (int i = 0; i < PosList.arraySize; i++)
+            {
+                using (new UnityEngine.GUILayout.VerticalScope("box"))
+                {
+                    using (new UnityEngine.GUILayout.VerticalScope("box"))
+                    {
+                        EditorGUILayout.PropertyField(PosList.GetArrayElementAtIndex(i), new GUIContent("Position_" + i));
+                    }
+                    GUI.contentColor = Color.yellow;
+                    if (GUILayout.Button("-"))
+                    {
+                        ambientSound.positionList.RemoveAt(i); 
+                    }
+                    GUI.contentColor = Color.white;
+                }
+            }
+
+
+        }
+        GUI.backgroundColor = Color.green;
+        if (GUILayout.Button("Add Point",GUILayout.Height(66f)))
+        {
+            ambientSound.positionList.Add(new GAMI.AmbientSound.WwisePositionTemplate(new Vector3(0, 0, 0), new Vector3(0, 0, 0)));
+        }
+        GUI.backgroundColor = Color.white;
+        //if (GUILayout.Button("refresh wwise project"))
+        //{
+        //    UpdateWwiseProjectInfo();
+        //}
+
+        CheckIsInspectorLocked();
+        //EditorUtility.SetDirty(ambientSound);
+        serializedObject.ApplyModifiedProperties();
+    }
+
+
+
+    public float radiusFromWaapi;//用于去除从waapi里得到得半径
+    private void OnSceneGUI()
+    {
+        //if (IsWwiseWorkUnitModified())
+        //    UpdateWwiseProjectInfo();
+
+
+        //radius = GetEventAttenuationRadiusFromBankInfo(ambientSound.soundEvent);
+        for (int i = 0; i < ambientSound.positionList.Count; i++)
+        {
+            GAMI.AmbientSound.WwisePositionTemplate transformTemp = ambientSound.positionList[i];
+            int id = GUIUtility.GetControlID(this.GetHashCode(), FocusType.Passive);
+            Handles.Label(transformTemp.position, "point_" + i);
+ 
+            transformTemp.position = Handles.PositionHandle(transformTemp.position, Quaternion.identity);
+
+            //画圆心
+            DrawAttenuationSphere(Color.black, id, transformTemp.position, 0.5f);
+            //画球
+            DrawAttenuationSphere(new Color(1, 0, 0, 0.1f), id, transformTemp.position, radius);
+            //画网状衰减球
+             DrawAttenuationSphereNet(Color.yellow, transformTemp.position, radius);
+
+            //画扇形
+            Handles.color = new Color(0, 1, 0, 0.2f);
+            Vector3 fo = Quaternion.Euler(new Vector3(0, -transformTemp.rotation.y / 2, 0)) * Vector3.forward;
+            Vector3 up = Quaternion.Euler(transformTemp.rotation) * Vector3.up;
+
+            Debug.Log(Quaternion.Euler(Vector3.forward));
+            Vector3 startl = Quaternion.Euler(transformTemp.rotation) * Vector3.forward;
+
+            Handles.DrawSolidArc(transformTemp.position, up, startl, 90f, radius);
+
+
+        }
+        Debug.Log("an:" + Vector3.Angle(Vector3.right, Vector3.up));
+
+
+        //System.Action<float> getterAction = (float a) =>
+        //{
+        //    Debug.Log("获取得衰减：" + a);
+        //    radiusFromWaapi = a;
+
+        //};
+        //GetEventAttenuationRadiusFromWaapi(ambientSound.soundEvent,getterAction);
+        //Debug.Log("定已全局变量将衰减半径取出：" + radiusFromWaapi);
+
+    }
+
+
+
+
+    private void DrawAttenuationConeArc(Color color,Vector3 position,Vector3 narmal,Vector3 from,float coneAngle,float radius) 
+    { 
+
+    
+    }
+
+
+    /// <summary>
+    /// 透明衰减球
+    /// </summary>
+    /// <param name="color"></param>
+    /// <param name="controlID"></param>
+    /// <param name="center"></param>
+    /// <param name="radius"></param>
+    private void DrawAttenuationSphere(Color color, int controlID, Vector3 center,  float radius) 
+    {
+        Handles.color = color;
+        Handles.SphereHandleCap(controlID, center, Quaternion.identity, radius*2, EventType.Repaint);
+
+    }
+
+    /// <summary>
+    /// 网状衰减球骨架
+    /// </summary>
+    /// <param name="color"></param>
+    /// <param name="center"></param>
+    /// <param name="radius"></param>
+    private void DrawAttenuationSphereNet(Color color, Vector3 center, float radius)
+    {
+        Handles.color = color;
+        Handles.DrawWireArc(center, Vector3.up, Vector3.right, 360f, radius);
+        Handles.DrawWireArc(center, Vector3.right, Vector3.up, 360f, radius);
+        Handles.DrawWireArc(center, Vector3.forward, Vector3.right, 360f, radius);
+    }
+
+
+
+    /// <summary>
+    /// 获取wwise事件的衰减距离大小
+    /// </summary>
+    /// <param name="eventName"></param>
+    /// <returns></returns>
+    public float GetEventAttenuationRadiusFromBankInfo(string eventName) 
+    {
+        if (string.IsNullOrEmpty(eventName))
+        {
+            return 0;
+        }
+        float eventRadius = AkWwiseProjectInfo.GetData().GetEventMaxAttenuation(AkUtilities.ShortIDGenerator.Compute(eventName));
+       
+        return eventRadius;
+    }
+
+
+    /// <summary>
+    /// 面板锁定与释放操作
+    /// </summary>
+    private void LockInspector() 
+    {
+        ActiveEditorTracker.sharedTracker.isLocked = !ActiveEditorTracker.sharedTracker.isLocked;      
+    }
+
+    /// <summary>
+    /// 检查面板是否锁定，并给予信息提示
+    /// </summary>
+    private void CheckIsInspectorLocked() 
+    {
+        EditorGUILayout.HelpBox(ActiveEditorTracker.sharedTracker.isLocked ? "面板已锁定，可编辑发声点位置！！！" : "锁定面板之后编辑发声点位置！！！",
+            ActiveEditorTracker.sharedTracker.isLocked ? MessageType.Info : MessageType.Error);
+        buttonName = ActiveEditorTracker.sharedTracker.isLocked ? "Un Lock" : "Lock To Edit";
+    }
+
+
+    public void UpdateWwiseProjectInfo() 
+    {
+        AkUtilities.GenerateSoundbanks(new List<string>() { "Windows" });
+    }
+
+
+
+    /// <summary>
+    /// 通过事件名返回它包含的sound名字
+    /// </summary>
+    /// <param name="eventName"></param>
+    /// <returns></returns>
+    public string GetTargetSoundNameFromEvent(string eventName) 
+    {
+        string targetName = string.Empty;
+        string[] eventWWUPathArray = GetAllWwuPathInWwiseFolder("Events");
+        for (int i = 0; i < eventWWUPathArray.Length; i++)
+        {
+            System.Xml.XmlDocument xmlroot = new System.Xml.XmlDocument();
+            xmlroot.Load(eventWWUPathArray[i]);
+            System.Xml.XmlNodeList allEventNodeList = xmlroot.GetElementsByTagName("Event");
+            for (int j = 0; j < allEventNodeList.Count; j++)
+            {
+                if ((allEventNodeList[j] as System.Xml.XmlElement).GetAttribute("Name")==eventName)
+                {
+
+                    targetName = (allEventNodeList[j].SelectSingleNode("//ObjectRef") as System.Xml.XmlElement).GetAttribute("Name");
+
+                }
+
+            }        
+           
+        }
+
+        return targetName;
+ 
+    }
+
+
+
+
+    /// <summary>
+    /// WWISE的工程文件夹路径，比如D:\MyTestProject\TestUnity2020Wwise\New Unity Project\New Unity Project_WwiseProject
+    /// </summary>
+    public static string WwisePeojectDirectoryPath
+    {
+        get { return AkBasePathGetter.GetWwiseProjectDirectory(); }
+    }
+
+
+    /// <summary>
+    /// 返回wwise文件夹的路径，比如D:\MyTestProject\TestUnity2020Wwise\New Unity Project\New Unity Project_WwiseProject\Actor-Mixer Hierarchy
+    /// </summary>
+    /// <param name="wwiseFolerName">比如Actor-Mixer Hierarchy、Events、Originals</param>
+    /// <returns></returns>
+    public string GetWwiseWWUParentFolerPath(string wwiseFolerName) 
+    {
+        return System.IO.Path.Combine(WwisePeojectDirectoryPath, wwiseFolerName);
+    }
+
+
+
+    /// <summary>
+    /// 返回wwise文件下所有的wwu后缀的工程文件路径
+    /// </summary>
+    /// <param name="wwiseFolerName"></param>
+    /// <returns></returns>
+    public string[] GetAllWwuPathInWwiseFolder(string wwiseFolerName)
+    {
+        string wiseFlderPath = GetWwiseWWUParentFolerPath(wwiseFolerName);
+        return System.IO.Directory.GetFiles(wiseFlderPath, "*wwu");
+    }
+
+
+
+    public Dictionary<string, System.DateTime> workUnitWithLastWriteTime = new Dictionary<string, System.DateTime>();
+    /// <summary>
+    /// 通过文件修改时间，判断wwise工程是否被修改，如果修改则从新生成bank，更新衰减距离
+    /// </summary>
+    /// <returns></returns>
+    public bool IsWwiseWorkUnitModified() 
+    {
+        bool isModified = false;
+
+        string[] pathArr = GetAllWwuPathInWwiseFolder("Actor-Mixer Hierarchy");
+        for (int i = 0; i <pathArr.Length; i++)
+        {
+            string workUnitName = System.IO.Path.GetFileName(pathArr[i]);
+            System.DateTime fileLastTime;
+            if (workUnitWithLastWriteTime.TryGetValue(workUnitName,out fileLastTime))
+            {
+                System.DateTime dateFileTime = System.IO.File.GetLastWriteTime(pathArr[i]);
+                if (dateFileTime!=fileLastTime)
+                {
+                    isModified = true;
+                    workUnitWithLastWriteTime[workUnitName] = dateFileTime;
+                    break;
+                }
+            }
+            else
+            {
+                workUnitWithLastWriteTime.Add(workUnitName, fileLastTime);
+                break;
+            }
+
+        }
+        return isModified;
+   
+    }
+
+
+    public System.Guid GetEventGuid(string eventName) 
+    {
+        return AkWwiseProjectInfo.GetData().GetEventInfo(AkUtilities.ShortIDGenerator.Compute(eventName)).Guid;
+    }
+
+
+
+
+
+
+    #region WAAPI------------------------------------------------------------------------------------------------------------
+
+
+    public class Arg :Args
+    {
+        [System.Serializable]
+        public class From 
+        {
+
+            public string[] id;
+
+        }
+
+        public From from;
+
+
+    
+    }
+
+    class Res 
+    {
+        [System.Serializable]
+        public class Version
+        {
+            public string displayName;
+            public int year;
+            public int major;
+            public int minor;
+            public int build;
+            public string nickname;
+            public int schema;
+
+
+        }
+
+        public string displayName;
+        public int apiVersion;
+        public string platform;
+        public string copyright;
+
+        public Version version;
+
+    }
+
+
+
+
+    class Res1
+    {
+        [System.Serializable]
+        public class WwiseObj 
+        {
+            public string name;
+            public string id;
+            public uint shortId;
+
+
+            [System.Serializable]
+            public class AudioSourcemaxRadiusAttenuation
+            {
+                public float radius;
+                public string id;
+
+            }
+            public AudioSourcemaxRadiusAttenuation maxRadiusAttenuation = new AudioSourcemaxRadiusAttenuation();
+
+
+        }
+        public WwiseObj[] @return;
+
+
+    }
+
+
+
+    /// <summary>
+    /// 从waapi里拿半径
+    /// </summary>
+    /// <param name="eventName"></param>
+    /// <param name="getter"></param>
+    /// <returns></returns>
+    public void GetEventAttenuationRadiusFromWaapi(string eventName, System.Action<float> getter = null)
+    {
+        if (!string.IsNullOrEmpty(eventName))
+        {
+            AkWaapiUtilities.QueueCommandWithReturnType(ak.wwise.core.@object.get, (Res1 res) =>
+            {
+                string resJson = JsonUtility.ToJson(res, true);
+                Debug.Log("转换前：" + resJson);
+                Debug.Log("衰减：" + res.@return[0].maxRadiusAttenuation.radius);
+
+                getter?.Invoke(res.@return[0].maxRadiusAttenuation.radius);
+            },
+            new Arg() { from = new Arg.From() { id = new string[] { "{" + GetEventGuid(eventName) + "}" } } }
+            ,
+            JsonUtility.ToJson(new ReturnOptions(new string[] { "id", "name", "shortId", WaapiKeywords.MAX_RADIUS_ATTENUATION }))
+            );
+        }
+
+
+    }
+
+    public void GetRadiusFromWaapiNewVersion(string eventName,System.Action<float> act=null)
+    {
+        AkWaapiUtilities.QueueCommandWithReturnType(ak.wwise.core.@object.get, (Res1 res) =>
+        {
+            string resJson = JsonUtility.ToJson(res, true);
+            Debug.Log("转换前：" + resJson);
+            Debug.Log("衰减：" + res.@return[0].maxRadiusAttenuation.radius);
+    
+            act?.Invoke(res.@return[0].maxRadiusAttenuation.radius);
+        },
+        //new Arg() { from = new Arg.From() { id = new string[] { "{" + GetEventGuid(eventName) + "}" } } }
+        new WaqlArgs($"where name =\"{eventName}\"")
+        ,
+        JsonUtility.ToJson(new ReturnOptions(new string[] { "id", "name","shortId", WaapiKeywords.MAX_RADIUS_ATTENUATION }))
+        );
+ 
+    }
+
+    #endregion
+
+
+
+
+
+
+
+}

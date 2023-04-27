@@ -1,0 +1,23 @@
+using UnityEngine;
+using UnityEditor;
+
+[CustomEditor(typeof(GAMI.SliderSound)), CanEditMultipleObjects]
+public class SliderSoundInspector : Editor
+{
+    GAMI.SliderSound component;
+
+    void OnEnable()
+    {
+        component = target as GAMI.SliderSound;
+    }
+
+    public override void OnInspectorGUI()
+    {
+        serializedObject.Update();
+
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("RTPCName"));
+        EditorGUILayout.LabelField("Audio Events:");
+        AudioScriptGUI.DrawList(serializedObject.FindProperty("audioEvents"));
+        serializedObject.ApplyModifiedProperties();
+    }
+}

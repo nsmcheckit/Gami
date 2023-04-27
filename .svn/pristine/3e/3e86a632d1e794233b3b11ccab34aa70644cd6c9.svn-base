@@ -1,0 +1,382 @@
+﻿using GAMI;
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Runtime.Remoting.Contexts;
+using Unity.Plastic.Newtonsoft.Json;
+using Unity.Plastic.Newtonsoft.Json.Linq;
+using Unity.Plastic.Newtonsoft.Json.Serialization;
+using UnityEditor;
+using UnityEngine;
+
+public class SoundToolsUtility
+{
+    /// <summary>
+    /// 从文件夹路径中，获取配置过音频组件的预制体的相关音频配置信息
+    /// </summary>
+    /// <typeparam name="T">ButtonSound、EffectSound等</typeparam>
+    /// <param name="folder"></param>
+    /// <returns></returns>
+    public static List<SoundConfigData<T>> GetSoundComponentsConfigDataInProject<T>(string folder = "Assets") where T : Component, new()
+    {
+        List<SoundConfigData<T>> Tlist = new List<SoundConfigData<T>>();
+        string[] guids = AssetDatabase.FindAssets("t:Prefab", new string[] { folder });
+        
+        if (guids != null)
+        {
+            for (int i = 0; i < guids.Length; i++)
+            {              
+                string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                GameObject go = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path) as GameObject;
+                if (go != null)
+                {
+                    T[] res = go.GetComponentsInChildren<T>(true);
+                    if (res != null)
+                    {
+                        foreach (var item in res)
+                        {
+                            SoundConfigData<T> soundConfigData = new SoundConfigData<T>();
+                            soundConfigData.typeName = typeof(T).Name;
+                            soundConfigData.prefabPath = path;
+                            soundConfigData.selfHirarchyPath = GetHierarchyPath(item.gameObject, item.gameObject.name);
+                            soundConfigData.audioComponent = item;                           
+                            Tlist.Add(soundConfigData);
+                        }
+                    }
+                }
+
+                if (EditorUtility.DisplayCancelableProgressBar(typeof(T).Name, go.name, (float)i / guids.Length) || i >= guids.Length - 1)
+                {
+                    EditorUtility.ClearProgressBar();
+                    break;
+                }
+
+            }
+        }
+        return Tlist;
+       
+    }
+
+
+    /// <summary>
+    /// 获取物体得层级路径，比如A prefab下面有子级物体B，则路径返回：A/B
+    /// </summary>
+    /// <param name="thisGo"></param>
+    /// <param name="thisGoName"></param>
+    /// <returns></returns>
+    public static string GetHierarchyPath(GameObject thisGo, string thisGoName)
+    {
+        while (thisGo.transform.parent != null)
+        {
+            thisGoName = thisGo.transform.parent.name + "/" + thisGoName;
+            return GetHierarchyPath(thisGo.transform.parent.gameObject, thisGoName);
+        }
+        return thisGoName;
+    }
+
+    /// <summary>
+    /// 查找父级物体下的子级物体
+    /// </summary>
+    /// <param name="parent"></param>
+    /// <param name="hierarchyPath">eg:”parent/child1/A" 或者 "child1/A" </param>
+    /// <returns></returns>
+    public static Transform GetChildByHierarchyPath(Transform parent, string hierarchyPath)
+    {
+        if (parent != null)
+        {
+            if (hierarchyPath.Equals(parent.name))
+            {
+                return parent.transform;
+            }
+            bool startWithParentName = hierarchyPath.StartsWith(parent.name + "/");
+            return parent.Find(!startWithParentName ? hierarchyPath : hierarchyPath.Remove(0, parent.name.Length + 1));
+        }
+        return parent.transform;
+    }
+
+    /// <summary>
+    /// 获取子级层级最上层的物体
+    /// </summary>
+    /// <param name="child"></param>
+    /// <returns></returns>
+    public static Transform FindTopParent(Transform child) 
+    {
+        Transform t = child.transform;
+        while (child.parent != null)
+        {
+            return FindTopParent(child.parent);
+        }
+        return t;
+    }
+
+
+    /// <summary>
+    /// 获取现在的时间，以字符串形式呈现
+    /// </summary>
+    /// <returns></returns>
+    public static string GetNowTimeToString() 
+    {
+        return DateTime.Now.Year.ToString() + "_" + DateTime.Now.Month.ToString() + "_" + DateTime.Now.Day.ToString() + "_" +
+            DateTime.Now.Hour.ToString() + "_" + DateTime.Now.Minute.ToString() + "_" + DateTime.Now.Second.ToString() + "_" +
+            DateTime.Now.Millisecond.ToString();
+    }
+
+    /// <summary>
+    /// 获取event的guid
+    /// </summary>
+    /// <param name="eventName"></param>
+    /// <returns></returns>
+    public static System.Guid GetEventGuid(string eventName)
+    {
+        return AkWwiseProjectInfo.GetData().GetEventInfo(AkUtilities.ShortIDGenerator.Compute(eventName)).Guid;
+    }
+
+
+    public Dictionary<string, System.DateTime> workUnitWithLastWriteTime = new Dictionary<string, System.DateTime>();
+    /// <summary>
+    /// 通过文件修改时间，判断wwise工程是否被修改，如果修改则从新生成bank，更新衰减距离
+    /// </summary>
+    /// <returns></returns>
+    public bool IsWwiseWorkUnitModified()
+    {
+        bool isModified = false;
+
+        string[] pathArr = GetAllWwuPathInWwiseFolder("Actor-Mixer Hierarchy");
+        for (int i = 0; i < pathArr.Length; i++)
+        {
+            string workUnitName = System.IO.Path.GetFileName(pathArr[i]);
+            System.DateTime fileLastTime;
+            if (workUnitWithLastWriteTime.TryGetValue(workUnitName, out fileLastTime))
+            {
+                System.DateTime dateFileTime = System.IO.File.GetLastWriteTime(pathArr[i]);
+                if (dateFileTime != fileLastTime)
+                {
+                    isModified = true;
+                    workUnitWithLastWriteTime[workUnitName] = dateFileTime;
+                    break;
+                }
+            }
+            else
+            {
+                workUnitWithLastWriteTime.Add(workUnitName, fileLastTime);
+                break;
+            }
+
+        }
+        return isModified;
+
+    }
+
+
+    /// <summary>
+    /// 返回wwise文件下所有的wwu后缀的工程文件路径
+    /// </summary>
+    /// <param name="wwiseFolerName"></param>
+    /// <returns></returns>
+    public static string[] GetAllWwuPathInWwiseFolder(string wwiseFolerName)
+    {
+        string wiseFlderPath = GetWwiseWWUParentFolerPath(wwiseFolerName);
+        return System.IO.Directory.GetFiles(wiseFlderPath, "*wwu");
+    }
+
+
+
+
+    /// <summary>
+    /// WWISE的工程文件夹路径，比如D:\MyTestProject\TestUnity2020Wwise\New Unity Project\New Unity Project_WwiseProject
+    /// </summary>
+    public static string WwisePeojectDirectoryPath
+    {
+        get { return AkBasePathGetter.GetWwiseProjectDirectory(); }
+    }
+
+
+    /// <summary>
+    /// 返回wwise文件夹的路径，比如D:\MyTestProject\TestUnity2020Wwise\New Unity Project\New Unity Project_WwiseProject\Actor-Mixer Hierarchy
+    /// </summary>
+    /// <param name="wwiseFolerName">比如Actor-Mixer Hierarchy、Events、Originals</param>
+    /// <returns></returns>
+    public static string GetWwiseWWUParentFolerPath(string wwiseFolerName)
+    {
+        return System.IO.Path.Combine(WwisePeojectDirectoryPath, wwiseFolerName);
+    }
+
+
+
+    /// <summary>
+    /// 通过事件名返回它包含的sound名字
+    /// </summary>
+    /// <param name="eventName"></param>
+    /// <returns></returns>
+    public static string GetTargetSoundNameFromEvent(string eventName)
+    {
+        string targetName = string.Empty;
+        string[] eventWWUPathArray = GetAllWwuPathInWwiseFolder("Events");
+        for (int i = 0; i < eventWWUPathArray.Length; i++)
+        {
+            System.Xml.XmlDocument xmlroot = new System.Xml.XmlDocument();
+            xmlroot.Load(eventWWUPathArray[i]);
+            System.Xml.XmlNodeList allEventNodeList = xmlroot.GetElementsByTagName("Event");
+            for (int j = 0; j < allEventNodeList.Count; j++)
+            {
+                if ((allEventNodeList[j] as System.Xml.XmlElement).GetAttribute("Name") == eventName)
+                {
+
+                    targetName = (allEventNodeList[j].SelectSingleNode("//ObjectRef") as System.Xml.XmlElement).GetAttribute("Name");
+
+                }
+
+            }
+
+        }
+
+        return targetName;
+
+    }
+
+    /// <summary>
+    /// 执行svn进程相关操作,SVNCallFunction("commit", Application.dataPath.Replace("/Assets", "/") + "Wwise Project/GeneratedSoundBanks");
+    /// </summary>
+    /// <param name="svnCtr"></param>
+    /// <param name="path"></param>
+    public static void SVNCallFunction(string svnCtr, string path)
+    {
+
+        string c = "/c Tortoiseproc.exe /command:" + svnCtr + " /path:\"" + path + "\" closeonend 0";
+        //System.Diagnostics.ProcessStartInfo p = new System.Diagnostics.ProcessStartInfo("cmd.exe", c);
+        //p.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
+        //System.Diagnostics.Process pro = new System.Diagnostics.Process();
+        //pro.StartInfo = p;
+        //pro.Start();
+
+        //pro.Close();
+       
+        var process = new System.Diagnostics.Process();
+        process.StartInfo.FileName = "cmd.exe";
+        process.StartInfo.UseShellExecute = false;
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.CreateNoWindow = true;
+        //process.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
+        process.StartInfo.Arguments = c;
+        process.Start();
+
+        process.WaitForExit();
+        process.Close();
+
+    }
+
+    /// <summary>
+    /// 通用方法，用于快速查找定位Project路径里某文件并高亮显示，如鼠标选中一样
+    /// </summary>
+    /// <param name="fileName">ButtonSound </param>
+    /// <param name="fileExtensionName">eg: .cs  , .prefab </param>
+    public static void SelectObjectInProjectView(string fileName, string fileExtensionName)
+    {
+        string filePath = string.Empty;
+        string[] s = AssetDatabase.FindAssets(fileName);
+
+        if (s != null)
+        {
+            for (int i = 0; i < s.Length; i++)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(s[i]);
+                if (Path.GetFileName(path) == (fileName + fileExtensionName))
+                {
+                    filePath = path;
+                }
+            }
+        }
+
+
+        if (!string.IsNullOrEmpty(filePath))
+        {
+            UnityEngine.Object o = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(filePath);
+            EditorGUIUtility.PingObject(o);
+            Selection.activeObject = o;
+        }
+
+    }
+
+    
+
+    /// <summary>
+    /// 将一个List保存成json格式字符串
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="targetList"></param>
+    /// <returns></returns>
+
+    public static string ConvertListToJson<T>(List<T> targetList)
+    {
+        JObject jo = new JObject();
+        JsonSerializer jsonSerializer = new JsonSerializer();
+        jsonSerializer.ReferenceLoopHandling = ReferenceLoopHandling.Ignore;
+        jsonSerializer.ContractResolver = new ContractResolver();
+        jsonSerializer.NullValueHandling = NullValueHandling.Ignore;
+        JToken items = JToken.FromObject(targetList, jsonSerializer);
+        jo["items"] = items;
+        JsonSerializerSettings set = new JsonSerializerSettings();
+        set.ContractResolver = new ContractResolver();
+        set.Formatting = Formatting.Indented;
+        set.NullValueHandling = NullValueHandling.Ignore;
+        return JsonConvert.SerializeObject(jo, set);
+
+    }
+
+    /// <summary>
+    /// 自定义协议解析器
+    /// </summary>
+    public class ContractResolver : DefaultContractResolver 
+    {
+        /// <summary>
+        /// 重写属性创建函数，加入属性白名单过滤，以实现能序列化UNity的monobehaviour类
+        /// </summary>
+        /// <param name="type"></param>
+        /// <param name="memberSerialization"></param>
+        /// <returns></returns>
+        protected override IList<JsonProperty> CreateProperties(Type type, MemberSerialization memberSerialization)
+        {
+            IList<JsonProperty> properties = base.CreateProperties(type, memberSerialization);
+
+            if (type.IsSubclassOf(typeof(MonoBehaviour)))//
+            {
+                List<string> fieldNames = GetFiedNamesCanBeSerialize(type);
+                properties = properties.Where(
+                    (x) =>
+                    {
+                        //将诸如rigidbody属性过滤一下，否则序列化类似rigidbody属性会报错
+                        //UnityEngine.Gameobject 类型字段不序列化
+                        return (fieldNames.Contains(x.PropertyName))
+                        && (!x.PropertyType.Equals(typeof(GameObject))); 
+                    }).ToList();
+            }
+            return properties;
+
+        }
+    }
+
+    /// <summary>
+    /// 获取public、且可序列化的字段，用于json序列化
+    /// </summary>
+    /// <param name="t"></param>
+    /// <returns></returns>
+    private static List<string> GetFiedNamesCanBeSerialize(Type t)
+    {
+        List<string> proList = new List<string>();
+        FieldInfo[] fInfo = t.GetFields();
+        for (int i = 0; i < fInfo.Length; i++)
+        {
+            if (fInfo[i].IsPublic && !fInfo[i].IsNotSerialized)
+            {
+                proList.Add(fInfo[i].Name);
+            }
+        }
+        return proList;  
+    }
+
+
+
+}

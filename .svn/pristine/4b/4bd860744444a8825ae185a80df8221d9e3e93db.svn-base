@@ -1,0 +1,212 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEditor;
+
+
+[CustomEditor(typeof(GAMI.AmbientSound)),CanEditMultipleObjects]
+public class AmbientSoundInspector : Editor
+{
+    GAMI.AmbientSound ambientSound;
+
+    float radius = 0;
+    private void Awake()
+    {
+        ambientSound = this.target as GAMI.AmbientSound;
+        
+    }
+
+    private void OnEnable()
+    {
+        radius = GetEventAttenuationRadiusFromBankInfo(ambientSound.soundEvent);
+        
+    }
+
+
+    string buttonName = "Lock Inspector";
+    public override void OnInspectorGUI()
+    {
+        serializedObject.Update();
+        GUI.backgroundColor = ActiveEditorTracker.sharedTracker.isLocked ? Color.green : Color.red;
+        if (GUILayout.Button(buttonName))
+        {
+            LockInspector();
+        }
+        GUI.backgroundColor = Color.white;
+
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("soundEvent"));
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("positionType"));
+        var PosList = serializedObject.FindProperty("positionList");
+       
+        using (new UnityEngine.GUILayout.VerticalScope())
+        {
+            for (int i = 0; i < PosList.arraySize; i++)
+            {
+                using (new UnityEngine.GUILayout.VerticalScope("box"))
+                {
+                    using (new UnityEngine.GUILayout.VerticalScope("box"))
+                    {
+                        EditorGUILayout.PropertyField(PosList.GetArrayElementAtIndex(i), new GUIContent("Position_" + i));
+                    }
+                    GUI.contentColor = Color.yellow;
+                    if (GUILayout.Button("-"))
+                    {
+                        ambientSound.positionList.RemoveAt(i); 
+                    }
+                    GUI.contentColor = Color.white;
+                }
+            }
+
+
+        }
+        GUI.backgroundColor = Color.green;
+        if (GUILayout.Button("Add Point",GUILayout.Height(66f)))
+        {
+            ambientSound.positionList.Add(new GAMI.AmbientSound.WwisePositionTemplate(new Vector3(0, 0, 0), new Vector3(0, 0, 0)));
+        }
+        GUI.backgroundColor = Color.white;
+        //if (GUILayout.Button("refresh wwise project"))
+        //{
+        //    UpdateWwiseProjectInfo();
+        //}
+
+        CheckIsInspectorLocked();
+        //EditorUtility.SetDirty(ambientSound);
+        serializedObject.ApplyModifiedProperties();
+    }
+
+
+
+    public float radiusFromWaapi;//用于去除从waapi里得到得半径
+    private void OnSceneGUI()
+    {
+        //if (IsWwiseWorkUnitModified())
+        //    UpdateWwiseProjectInfo();
+
+
+        //radius = GetEventAttenuationRadiusFromBankInfo(ambientSound.soundEvent);
+        for (int i = 0; i < ambientSound.positionList.Count; i++)
+        {
+            GAMI.AmbientSound.WwisePositionTemplate transformTemp = ambientSound.positionList[i];
+            int id = GUIUtility.GetControlID(this.GetHashCode(), FocusType.Passive);
+            Handles.Label(transformTemp.position, "point_" + i);
+ 
+            transformTemp.position = Handles.PositionHandle(transformTemp.position, Quaternion.identity);
+
+            //画圆心
+            DrawAttenuationSphere(Color.black, id, transformTemp.position, 0.5f);
+            //画球
+            DrawAttenuationSphere(new Color(1, 0, 0, 0.1f), id, transformTemp.position, radius);
+            //画网状衰减球
+             DrawAttenuationSphereNet(Color.yellow, transformTemp.position, radius);
+
+            //画扇形
+            Handles.color = new Color(0, 1, 0, 0.2f);
+            Vector3 fo = Quaternion.Euler(new Vector3(0, -transformTemp.rotation.y / 2, 0)) * Vector3.forward;
+            Vector3 up = Quaternion.Euler(transformTemp.rotation) * Vector3.up;
+
+            Debug.Log(Quaternion.Euler(Vector3.forward));
+            Vector3 startl = Quaternion.Euler(transformTemp.rotation) * Vector3.forward;
+
+            Handles.DrawSolidArc(transformTemp.position, up, startl, 90f, radius);
+
+
+        }
+        Debug.Log("an:" + Vector3.Angle(Vector3.right, Vector3.up));
+
+
+        //System.Action<float> getterAction = (float a) =>
+        //{
+        //    Debug.Log("获取得衰减：" + a);
+        //    radiusFromWaapi = a;
+
+        //};
+        //GetEventAttenuationRadiusFromWaapi(ambientSound.soundEvent,getterAction);
+        //Debug.Log("定已全局变量将衰减半径取出：" + radiusFromWaapi);
+
+    }
+
+
+
+
+    private void DrawAttenuationConeArc(Color color,Vector3 position,Vector3 narmal,Vector3 from,float coneAngle,float radius) 
+    { 
+
+    
+    }
+
+
+    /// <summary>
+    /// 透明衰减球
+    /// </summary>
+    /// <param name="color"></param>
+    /// <param name="controlID"></param>
+    /// <param name="center"></param>
+    /// <param name="radius"></param>
+    private void DrawAttenuationSphere(Color color, int controlID, Vector3 center,  float radius) 
+    {
+        Handles.color = color;
+        Handles.SphereHandleCap(controlID, center, Quaternion.identity, radius*2, EventType.Repaint);
+
+    }
+
+    /// <summary>
+    /// 网状衰减球骨架
+    /// </summary>
+    /// <param name="color"></param>
+    /// <param name="center"></param>
+    /// <param name="radius"></param>
+    private void DrawAttenuationSphereNet(Color color, Vector3 center, float radius)
+    {
+        Handles.color = color;
+        Handles.DrawWireArc(center, Vector3.up, Vector3.right, 360f, radius);
+        Handles.DrawWireArc(center, Vector3.right, Vector3.up, 360f, radius);
+        Handles.DrawWireArc(center, Vector3.forward, Vector3.right, 360f, radius);
+    }
+
+
+
+    /// <summary>
+    /// 获取wwise事件的衰减距离大小
+    /// </summary>
+    /// <param name="eventName"></param>
+    /// <returns></returns>
+    public float GetEventAttenuationRadiusFromBankInfo(string eventName) 
+    {
+        if (string.IsNullOrEmpty(eventName))
+        {
+            return 0;
+        }
+        float eventRadius = AkWwiseProjectInfo.GetData().GetEventMaxAttenuation(AkUtilities.ShortIDGenerator.Compute(eventName));
+       
+        return eventRadius;
+    }
+
+
+    /// <summary>
+    /// 面板锁定与释放操作
+    /// </summary>
+    private void LockInspector() 
+    {
+        ActiveEditorTracker.sharedTracker.isLocked = !ActiveEditorTracker.sharedTracker.isLocked;      
+    }
+
+    /// <summary>
+    /// 检查面板是否锁定，并给予信息提示
+    /// </summary>
+    private void CheckIsInspectorLocked() 
+    {
+        EditorGUILayout.HelpBox(ActiveEditorTracker.sharedTracker.isLocked ? "面板已锁定，可编辑发声点位置！！！" : "锁定面板之后编辑发声点位置！！！",
+            ActiveEditorTracker.sharedTracker.isLocked ? MessageType.Info : MessageType.Error);
+        buttonName = ActiveEditorTracker.sharedTracker.isLocked ? "Un Lock" : "Lock To Edit";
+    }
+
+
+    public void UpdateWwiseProjectInfo() 
+    {
+        AkUtilities.GenerateSoundbanks(new List<string>() { "Windows" });
+    }
+
+
+
+}

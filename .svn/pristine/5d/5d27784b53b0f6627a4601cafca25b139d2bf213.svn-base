@@ -1,0 +1,53 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEditor;
+using UnityEngine;
+
+public class WwisePlaybacker : EditorWindow
+{
+
+
+    [MenuItem("GAMI/Tools/Playbacker")]
+    public static void ShowWindow() 
+    {
+        WwisePlaybacker wwisePlaybacker = GetWindow<WwisePlaybacker>();
+        wwisePlaybacker.Show(); 
+    }
+
+    float a = 0;
+    private void OnGUI()
+    {
+        //var tx= EditorGUIUtility.FindTexture("PlayButton Anim");
+        
+        EditorGUILayout.BeginHorizontal();
+        if (GUILayout.Button(EditorGUIUtility.IconContent("d_Animation.Record")))
+        {
+
+        }
+        if (GUILayout.Button(EditorGUIUtility.IconContent("d_Animation.FirstKey")))
+        {
+
+        }
+        if (GUILayout.Button(EditorGUIUtility.IconContent("d_Animation.PrevKey")))
+        {
+
+        }
+        if (GUILayout.Button(EditorGUIUtility.IconContent("d_Animation.Play")))
+        {
+
+        }
+        if (GUILayout.Button(EditorGUIUtility.IconContent("d_Animation.NextKey")))
+        {
+
+        }
+        if (GUILayout.Button(EditorGUIUtility.IconContent("d_Animation.LastKey")))
+        {
+
+        }
+        EditorGUILayout.EndHorizontal();
+        var guicontent = EditorGUIUtility.IconContent("LensFlare Icon");
+
+        a = EditorGUILayout.Slider(guicontent, a, 0, 100);
+    }
+
+}

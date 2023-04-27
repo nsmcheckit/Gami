@@ -1,0 +1,766 @@
+﻿using GAMI.Editor.Waapi;
+using System;
+using System.Collections;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using UnityEngine;
+using System.Threading.Tasks;
+using Unity.Plastic.Newtonsoft.Json;
+using Unity.Plastic.Newtonsoft.Json.Linq;
+
+//ak.wwise.core.profiler.captureLog.itemAdded 
+struct Profiler_Log_Item_Type
+{
+    public const string Notification = "Notification";
+    public const string MusicTransition = "MusicTransition";
+    public const string Midi = "Midi";
+    public const string ExternalSource = "ExternalSource";
+    public const string Marker = "Marker";
+    public const string State = "State";
+    public const string Switch = "Switch";
+    public const string SetParameter = "SetParameter";
+    public const string ParameterChanged = "ParameterChanged";
+    public const string Bank = "Bank";
+    public const string Prepare = "Prepare";
+    public const string Event = "Event";
+    public const string DialogueEventResolved = "DialogueEventResolved";
+    public const string ActionTriggered = "ActionTriggered";
+    public const string ActionDelayed = "ActionDelayed";
+    public const string Message = "Message";
+    public const string APICall = "APICall";
+    public const string GameObjectRegistration = "GameObjectRegistration";
+}
+
+
+
+public class WaapiManager
+{
+    /// <summary>
+    /// construct
+    /// </summary>
+    static WaapiManager()
+    {
+        Debug.Log("waapi manager init");
+
+        UnityEditor.EditorApplication.update += Loop;
+    }
+
+    public delegate void ResultHandler(string result);
+    public delegate void SubscribeIdHandler(uint result);
+    public static ConcurrentQueue<Func<Task>> waapiCallFunctions = new ConcurrentQueue<Func<Task>>();
+
+
+    public static HashSet<int> RegistedGameobjectIds = new HashSet<int>();
+
+
+    public static void Loop() 
+    {
+        Debug.Log("fun:" + waapiCallFunctions.Count);
+        while (waapiCallFunctions.Count > 0)
+        {
+            if (waapiCallFunctions.TryDequeue(out Func<Task> f))
+            {
+                f?.Invoke();
+            }
+        }
+        //UnityEditor.EditorApplication.delayCall += () => Loop();
+
+    }
+
+
+    public static async Task Connect() 
+    {
+        if (!AkWaapiClient.IsConnected())
+        {
+            await AkWaapiClient.Connect();
+        }
+        
+    }
+
+
+    public static async Task<bool> WaitConnectSuccess() 
+    {
+        if (!AkWaapiClient.IsConnected())
+        {
+            await Connect();
+        }
+        return AkWaapiClient.IsConnected();
+    
+    }
+
+    public static void ClearUpdateDelegate() 
+    {
+        UnityEditor.EditorApplication.update -= Loop;
+    }
+
+    public static void ClearAllRegistedGameobjectIds() 
+    {
+        foreach (var id in RegistedGameobjectIds)
+        {
+            UnRegisterGameObject(id);
+        }
+    }
+
+    public static async void GetWwiseGlobalInfo(ResultHandler resultHandler)
+    {
+        //waapiCallFunctions.Enqueue(async () => {
+        //    string result = await AkWaapiClient.Call("ak.wwise.core.getInfo");
+        //    resultHandler?.Invoke(result);   
+        //});
+
+
+        string result = await AkWaapiClient.Call("ak.wwise.core.getInfo");
+        resultHandler?.Invoke(result);
+
+
+    }
+
+
+
+
+
+
+
+
+    #region subscribe
+
+    [System.Serializable]
+    public class LogItem
+    {
+        public int time;
+        public string objectName;
+
+    }
+    /// <summary>
+    /// ak.wwise.core.profiler.captureLog.itemAdded 订阅 当log添加的时候执行注册的回调函数
+    /// </summary>
+    /// <param name="logItemTypes"></param>
+    /// <param name="resultHandler"></param>
+    public static async void OnCaptureLogItemAdded(string[] logItemTypes, ResultHandler resultHandler = null, SubscribeIdHandler subscribeIdHandler = null)
+    {
+        //waapiCallFunctions.Enqueue(async () =>
+        //{
+        //    JObject opt = new JObject();
+        //    opt["types"] = new JArray(logItemTypes);
+        //    string s_Opt = JsonConvert.SerializeObject(opt);
+        //    uint subscriptionId = await AkWaapiClient.Subscribe("ak.wwise.core.profiler.captureLog.itemAdded", s_Opt, (string result) =>
+        //    {
+        //        resultHandler?.Invoke(result);
+        //    });
+        //    subscribeIdHandler?.Invoke(subscriptionId); 
+
+        //});
+
+        JObject opt = new JObject();
+        opt["types"] = new JArray(logItemTypes);
+        string s_Opt = JsonConvert.SerializeObject(opt);
+        uint subscriptionId = await AkWaapiClient.Subscribe("ak.wwise.core.profiler.captureLog.itemAdded", s_Opt, (string result) =>
+        {
+            resultHandler?.Invoke(result);
+        });
+        subscribeIdHandler?.Invoke(subscriptionId);
+
+
+
+
+    }
+
+    /// <summary>
+    /// 取消订阅
+    /// </summary>
+    /// <param name="subscriptionId"></param>
+    public static void Unsubscribe(uint subscriptionId) 
+    {
+        waapiCallFunctions.Enqueue(async () => 
+        {
+            await AkWaapiClient.Unsubscribe(subscriptionId);    
+        });
+    
+    }
+
+
+    /// <summary>
+    /// ak.soundengine.postEvent 通过event名post event
+    /// </summary>
+    /// <param name="eventName"></param>
+    /// <param name="gameObjectId"></param>
+    /// <param name="resultHandler"></param>
+    public static async void PostEventByName(string eventName, int gameObjectId, ResultHandler resultHandler = null) 
+    {
+        //waapiCallFunctions.Enqueue(async () =>
+        //{
+        //    JObject args = new JObject();
+        //    args["event"] = eventName;
+        //    args["gameObject"] = gameObjectId;
+        //    string s_Args = JsonConvert.SerializeObject(args);
+
+        //    string result = await AkWaapiClient.Call("ak.soundengine.postEvent", s_Args);
+        //    resultHandler?.Invoke(result);
+
+        //});
+
+
+        JObject args = new JObject();
+        args["event"] = eventName;
+        args["gameObject"] = gameObjectId;
+        string s_Args = JsonConvert.SerializeObject(args);
+
+        string res = await AkWaapiClient.Call("ak.soundengine.postEvent", s_Args);
+        resultHandler?.Invoke(res);
+
+    }
+
+
+    /// <summary>
+    /// ak.soundengine.registerGameObj 注册gameobject
+    /// </summary>
+    /// <param name="gameObjectId"></param>
+    /// <param name="name"></param>
+    public static async void RegisterGameObject(int gameObjectId, string name) 
+    {
+        //waapiCallFunctions.Enqueue(async () =>
+        //{
+        //    JObject args = new JObject();
+        //    args["gameObject"] = gameObjectId;
+        //    args["name"] = name;
+        //    string s_Args = JsonConvert.SerializeObject(args);
+
+        //    await AkWaapiClient.Call("ak.soundengine.registerGameObj", s_Args);
+
+        //});
+
+        if (!RegistedGameobjectIds.Contains(gameObjectId))
+        {
+            JObject args = new JObject();
+            args["gameObject"] = gameObjectId;
+            args["name"] = name;
+            string s_Args = JsonConvert.SerializeObject(args);
+
+            await AkWaapiClient.Call("ak.soundengine.registerGameObj", s_Args);
+
+            RegistedGameobjectIds.Add(gameObjectId);
+        }
+
+
+    }
+
+
+    /// <summary>
+    /// ak.soundengine.unregisterGameObj 
+    /// </summary>
+    /// <param name="gameObjectId"></param>
+    public static void UnRegisterGameObject(int gameObjectId)
+    {
+        waapiCallFunctions.Enqueue(async () =>
+        {
+            JObject args = new JObject();
+            args["gameObject"] = gameObjectId;
+            string s_Args = JsonConvert.SerializeObject(args);
+
+            await AkWaapiClient.Call("ak.soundengine.unregisterGameObj", s_Args);
+            RegistedGameobjectIds.Remove(gameObjectId);
+
+        });
+    }
+
+
+
+
+
+    public static JObject StringToObject(string json) 
+    {
+        return JObject.Parse(json);
+    }
+
+
+    public static string JobjectToString(JObject Jo) 
+    {
+        return JsonConvert.SerializeObject(Jo);
+    }
+
+
+    /// <summary>
+    /// 设置go位置
+    /// </summary>
+    /// <param name="gameObjectId"></param>
+    /// <param name="transform"></param>
+    public static async void SetPosition(int gameObjectId, AkTransform transform) 
+    {
+        JObject args = new JObject();
+        args["gameObject"] = gameObjectId;
+
+        JObject positionTransform = new JObject();
+
+        JObject orientationFront = new JObject();
+        orientationFront["x"] = transform.OrientationFront().x;
+        orientationFront["y"] = transform.OrientationFront().y;
+        orientationFront["z"] = transform.OrientationFront().z;
+        positionTransform["orientationFront"] = orientationFront;
+
+        JObject orientationTop = new JObject();
+        orientationTop["x"] = transform.OrientationTop().x;
+        orientationTop["y"] = transform.OrientationTop().y;
+        orientationTop["z"] = transform.OrientationTop().z;
+        positionTransform["orientationTop"] = orientationTop;
+
+        JObject position = new JObject();
+        position["x"] = transform.Position().x;
+        position["y"] = transform.Position().y;
+        position["z"] = transform.Position().z;
+        positionTransform["position"] = position;
+
+        args["position"] = positionTransform;
+
+        string s_args = JsonConvert.SerializeObject(args);
+
+        await AkWaapiClient.Call("ak.soundengine.setPosition", s_args);
+
+    }
+
+
+    public static void SetPosition(int gameObjectId, Vector3 foward, Vector3 up, Vector3 v_lPosition)
+    {
+        JObject args = new JObject();
+        args["gameObject"] = gameObjectId;
+
+        JObject positionTransform = new JObject();
+
+        JObject orientationFront = new JObject();
+        orientationFront["x"] = foward.x;
+        orientationFront["y"] = foward.y;
+        orientationFront["z"] = foward.z;
+        positionTransform["orientationFront"] = orientationFront;
+
+        JObject orientationTop = new JObject();
+        orientationTop["x"] = up.x;
+        orientationTop["y"] = up.y;
+        orientationTop["z"] = up.z;
+        positionTransform["orientationTop"] = orientationTop;
+
+        JObject position = new JObject();
+        position["x"] = v_lPosition.x;
+        position["y"] = v_lPosition.y;
+        position["z"] = v_lPosition.z;
+        positionTransform["position"] = position;
+
+        args["position"] = positionTransform;
+
+        string s_args = JsonConvert.SerializeObject(args);
+        waapiCallFunctions.Enqueue(async () =>
+        {
+            await AkWaapiClient.Call("ak.soundengine.setPosition", s_args);
+        });
+
+        //await AkWaapiClient.Call("ak.soundengine.setPosition", s_args);
+
+
+
+
+
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+    #endregion
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    #region ak.wwise.core.audioSourcePeaks.getMinMaxPeaksInRegion 
+    class ArgsForgetMinMaxPeaksInRegion : Args
+    {
+        public string @object;//必填
+        public float timeFrom;//必填
+        public float timeTo;//必填
+        public int numPeaks;//必填
+        public bool getCrossChannelPeaks;
+
+    }
+
+
+    class PeaksRes1
+    {
+        public string[] peaksBinaryStrings;
+        public int maxAbsValue;
+        public int peaksArrayLength;
+        public int peaksDataSize;
+        public int numChannels;
+    }
+
+    private static float timePercent = 0;
+
+    public static float TimePercentForSearch
+    {
+        get { return timePercent; }
+        set { timePercent = value; }
+
+    }
+
+
+    public static void ResetTimeIndex()
+    {
+        TimePercentForSearch = 0;
+    }
+
+    /// <summary>
+    /// 从audiosource尾部开始，查找某audiosource的空白部分或低响度部分的起点时间，通过getter函数获得。
+    /// </summary>
+    /// <param name="audioSourceGUID"></param>
+    /// <param name="audioSourceDuration"></param>
+    /// <param name="searchTimeProgress">查找时间精度，默认1%的时间进度进行查找</param>
+    /// <param name="getter"></param>
+    public static void GetSplitTimeFromSourcePeak(string audioSourceGUID,float audioSourceDuration, float searchTimeProgress = 0.01f, System.Action<float> getter = null)
+    {
+
+        TimePercentForSearch += searchTimeProgress;
+        if (TimePercentForSearch >= 1) { return; }
+
+        AkWaapiUtilities.QueueCommandWithReturnType(ak.wwise.core.audioSourcePeaks.getMinMaxPeaksInRegion,
+        (PeaksRes1 pekRes) =>
+        {
+            Debug.Log("音频源属性" + JsonUtility.ToJson(pekRes, true));
+            Debug.LogError("下标" + TimePercentForSearch.ToString());
+            short value = PeaksBinaryToUint16(pekRes.peaksBinaryStrings[0]);//getCrossChannelPeaks为true因此这个数组大小为1
+            Debug.LogError("值" + value);
+            if (value >= -10 && value <= 0)
+            {
+                GetSplitTimeFromSourcePeak(audioSourceGUID, audioSourceDuration, searchTimeProgress, getter);
+            }
+            else
+            {
+                getter?.Invoke(audioSourceDuration * (1 - TimePercentForSearch));
+                return;
+            }
+
+        },
+        new ArgsForgetMinMaxPeaksInRegion()
+        {
+            @object = audioSourceGUID,
+            numPeaks = 1000,
+            timeFrom = audioSourceDuration * (1 - TimePercentForSearch),
+            timeTo = audioSourceDuration,
+            getCrossChannelPeaks = true
+
+        }
+        );
+
+    }
+
+    /// <summary>
+    /// 从audiosource尾部开始，查找某audiosource的空白部分或低响度部分的起点时间，通过getter函数获得。
+    /// </summary>
+    /// <param name="audioSourceGUID"></param>
+    /// <param name="audioSourceDuration"></param>
+    /// <param name="searchTimeProgress"></param>
+    /// <param name="audioSourceSamplesValueRange">音频采样阈值精度，默认是-10到0，值越小，则越精确，比如-10要比-20查找的空白部分更精确</param>
+    /// <param name="getter"></param>
+    public static void GetSplitTimeFromSourcePeak(string audioSourceGUID, float audioSourceDuration, float searchTimeProgress = 0.01f, int audioSourceSamplesValueRange=-10,System.Action<float> getter = null)
+    {
+
+        TimePercentForSearch += searchTimeProgress;
+        if (TimePercentForSearch >= 1) { return; }
+
+        AkWaapiUtilities.QueueCommandWithReturnType(ak.wwise.core.audioSourcePeaks.getMinMaxPeaksInRegion,
+        (PeaksRes1 pekRes) =>
+        {
+            Debug.Log("音频源属性" + JsonUtility.ToJson(pekRes, true));
+            Debug.LogError("下标" + TimePercentForSearch.ToString());
+            short value = PeaksBinaryToUint16(pekRes.peaksBinaryStrings[0]);//getCrossChannelPeaks为true因此这个数组大小为1
+            Debug.LogError("值" + value);
+
+            if (value >= audioSourceSamplesValueRange && value <= 0)
+            {
+                GetSplitTimeFromSourcePeak(audioSourceGUID, audioSourceDuration,searchTimeProgress, audioSourceSamplesValueRange, getter);
+            }
+            else
+            {
+                getter?.Invoke(audioSourceDuration * (1 - TimePercentForSearch));
+                return;
+            }
+
+        },
+        new ArgsForgetMinMaxPeaksInRegion()
+        {
+            @object = audioSourceGUID,
+            numPeaks = 1000,
+            timeFrom = audioSourceDuration * (1 - TimePercentForSearch),
+            timeTo = audioSourceDuration,
+            getCrossChannelPeaks = true
+
+        }
+        );
+
+    }
+
+
+    #endregion
+
+
+    #region ak.wwise.core.audioSourcePeaks.getMinMaxPeaksInTrimmedRegion 
+    class ArgsForgetMinMaxPeaksInTrimmedRegion : Args
+    {
+        public string @object;
+        public int numPeaks;
+        public bool getCrossChannelPeaks;
+
+    }
+
+
+    class PeaksRes
+    {
+        public string[] peaksBinaryStrings;
+        public int maxAbsValue;
+        public int peaksArrayLength;
+        public int peaksDataSize;
+        public int numChannels;
+
+
+
+    }
+
+    public static void GetPeaksInTrimmedRegion()
+    {
+
+        AkWaapiUtilities.QueueCommandWithReturnType(ak.wwise.core.audioSourcePeaks.getMinMaxPeaksInTrimmedRegion,
+            (PeaksRes pekRes) =>
+            {
+                Debug.Log("音频源属性" + JsonUtility.ToJson(pekRes, true));
+                for (int i = 0; i < pekRes.peaksBinaryStrings.Length; i++)
+                {
+                    Debug.Log("峰值 " + i.ToString() + ":" + PeaksBinaryToUint16(pekRes.peaksBinaryStrings[i]));
+                }
+            },
+            new ArgsForgetMinMaxPeaksInTrimmedRegion()
+            {
+                @object = "{B4A54DE2-36AA-46EC-B053-DB02C9DFE87C}",
+                numPeaks = 10,
+                getCrossChannelPeaks = false
+
+            }
+            );
+
+
+    }
+    #endregion
+
+    public static short PeaksBinaryToUint16(string peaksBinaryString)
+    {
+        byte[] byteArray = System.Convert.FromBase64String(peaksBinaryString);
+        return System.BitConverter.ToInt16(byteArray, 0);
+    }
+
+
+
+
+    #region ak.wwise.core.@object.setProperty
+
+    private class ArgForakwwisecoreobjectsetProperty<T> : Args
+    {
+
+        public string @object;
+
+        public string property;
+        public T value;//string,float,int,bool
+
+
+        public ArgForakwwisecoreobjectsetProperty(string obj, string propertyName, T val)
+        {
+            @object = obj;
+            property = propertyName;
+            value = val;       
+        }
+
+    }
+
+    public static void SetWwiseObjectProperty(string wwiseObjectGUID,string propertyName,object propertyValue)
+    {
+
+        AkWaapiUtilities.QueueCommand(ak.wwise.core.@object.setProperty,
+            new ArgForakwwisecoreobjectsetProperty<float>(wwiseObjectGUID,propertyName,(float)propertyValue),
+            null);
+
+    }
+
+
+
+    /// <summary>
+    /// 以触audioSource的空白部分，或者采样响度度较低的部分
+    /// </summary>
+    /// <param name="audioSourceGUID"></param>
+    /// <param name="audioSourceDuration"></param>
+    /// <param name="searchTimeProgress"></param>
+    /// <param name="audioSourceSampleRangeValue"></param>
+    public static void RemoveAudioSourceEmptyPart(string audioSourceGUID, float audioSourceDuration, float searchTimeProgress = 0.01f, int audioSourceSamplesValueRange = -10)
+    {
+        ResetTimeIndex();
+        GetSplitTimeFromSourcePeak(audioSourceGUID, audioSourceDuration, searchTimeProgress, audioSourceSamplesValueRange,(float splitTime)=> 
+        {
+            SetWwiseObjectProperty(audioSourceGUID, "TrimEnd", splitTime);      
+        }
+        
+        );
+    
+    }
+
+    #endregion
+
+
+
+
+    #region ak.wwise.core.@object.get
+
+    public class ArgsForakwwisecoreobjectget : Args
+    {
+        [System.Serializable]
+        public class From
+        {
+
+            public string[] id;
+
+        }
+
+        public From from;
+
+
+
+    }
+
+
+    class ResultForakwwisecoreobjectget
+    {
+        [System.Serializable]
+        public class WwiseObj
+        {
+            public string name;
+            public string id;
+            public uint shortId;
+
+
+            [System.Serializable]
+            public class AudioSourcemaxRadiusAttenuation
+            {
+                public float radius;
+                public string id;
+
+            }
+            public AudioSourcemaxRadiusAttenuation maxRadiusAttenuation = new AudioSourcemaxRadiusAttenuation();
+
+
+        }
+        public WwiseObj[] @return;
+
+
+
+    }
+
+
+
+
+
+
+    public static void GetRadiusFromWaapiFromWaql(string eventName, System.Action<float> getter = null)
+    {
+        AkWaapiUtilities.QueueCommandWithReturnType(ak.wwise.core.@object.get, (ResultForakwwisecoreobjectget res) =>
+        {
+            string resJson = JsonUtility.ToJson(res, true);
+            Debug.Log("转换前：" + resJson);
+            Debug.Log("衰减：" + res.@return[0].maxRadiusAttenuation.radius);
+
+            getter?.Invoke(res.@return[0].maxRadiusAttenuation.radius);
+        },
+        //new Arg() { from = new Arg.From() { id = new string[] { "{" + GetEventGuid(eventName) + "}" } } }
+        new WaqlArgs($"where name =\"{eventName}\"")
+        ,
+        JsonUtility.ToJson(new ReturnOptions(new string[] { "id", "name", "shortId", WaapiKeywords.MAX_RADIUS_ATTENUATION }))
+        );
+
+    }
+
+    public static void GetRadiusFromWaapiFromArgs(string eventName, System.Action<float> getter = null)
+    {
+        AkWaapiUtilities.QueueCommandWithReturnType(ak.wwise.core.@object.get, (ResultForakwwisecoreobjectget res) =>
+        {
+            string resJson = JsonUtility.ToJson(res, true);
+            Debug.Log("转换前：" + resJson);
+            Debug.Log("衰减：" + res.@return[0].maxRadiusAttenuation.radius);
+
+            getter?.Invoke(res.@return[0].maxRadiusAttenuation.radius);
+        },
+        new ArgsForakwwisecoreobjectget() { from = new ArgsForakwwisecoreobjectget.From() { id = new string[] { "{" + GetEventGuid(eventName) + "}" } } }
+        ,
+        JsonUtility.ToJson(new ReturnOptions(new string[] { "id", "name", "shortId", WaapiKeywords.MAX_RADIUS_ATTENUATION }))
+        );
+
+    }
+
+
+    #endregion
+
+
+
+    class Res
+    {
+        [System.Serializable]//必须加此特性
+        public class Version
+        {
+            public string displayName;
+            public int year;
+            public int major;
+            public int minor;
+            public int build;
+            public string nickname;
+            public int schema;
+
+
+        }
+
+        public string displayName;
+        public int apiVersion;
+        public string platform;
+        public string copyright;
+
+        public Version version;
+
+    }
+
+
+
+
+    #region comman Function
+    public static System.Guid GetEventGuid(string eventName)
+    {
+        return AkWwiseProjectInfo.GetData().GetEventInfo(AkUtilities.ShortIDGenerator.Compute(eventName)).Guid;
+    }
+
+    #endregion
+
+
+
+
+
+}

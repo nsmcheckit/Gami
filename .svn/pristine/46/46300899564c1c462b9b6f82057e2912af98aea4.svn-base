@@ -1,0 +1,18 @@
+{
+    "name": "GAMI.Runtime",
+    "references": [
+        "GUID:9304e09c5d309574ab89fbd40acb4416",
+        "GUID:349d9bb2aa2da4143927455597621759",
+        "GUID:e48d23c742cbf20449eb8231da293429",
+        "GUID:f06555f75b070af458a003d92f9efb00"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

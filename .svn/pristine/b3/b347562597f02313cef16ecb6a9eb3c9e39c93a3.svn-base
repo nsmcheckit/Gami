@@ -1,0 +1,45 @@
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace GAMI
+{
+    /// <summary>
+    /// Toggle���ʱ����audioEvent
+    /// </summary>
+    [AddComponentMenu("GAMI/ToggleSound")]
+    public class ToggleSound : MonoBehaviour
+    {
+        public string[] toggleaudioEvents;
+        public string[] untoggleaudioEvents;
+
+        void Start()
+        {
+            Toggle toggle = GetComponent<Toggle>();
+            if (toggle != null)
+            {
+                toggle.onValueChanged.AddListener((isOnChange) =>
+                {
+                    if (!toggle.isOn)
+                    {
+                        PlaySound(toggleaudioEvents);
+                    }
+                    else
+                    {
+                        PlaySound(untoggleaudioEvents);
+                    }
+                });
+            }
+        }
+
+        public void PlaySound(string[] events)
+        {
+            if(AkSoundEngine.IsInitialized())
+            {
+                for (int i = 0; i < events.Length; i++)
+                {
+                    AudioManager.Instance.PlaySound2D(events[i]);
+                }
+            }
+        }
+    }
+}

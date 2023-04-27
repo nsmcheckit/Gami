@@ -1,0 +1,195 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEditor;
+using UnityEngine.UI;
+
+public class QuickSearchWwiseAudioComp : EditorWindow
+{
+
+    public GameObject go;
+
+    private SerializedObject s;
+    private List<Button> buttonList;
+    private List<Toggle> toggleList;
+
+
+
+    [MenuItem("GAMI/Tools/UI配置助手")]
+    public static void ShowWindow() 
+    {
+        QuickSearchWwiseAudioComp ep = ScriptableWizard.GetWindow<QuickSearchWwiseAudioComp>(false);
+        ep.titleContent = new GUIContent("UI配置助手");
+        ep.Show();
+    }
+
+    private void Awake()
+    {
+        s = new SerializedObject(this);
+        buttonList = new List<Button>();
+        toggleList = new List<Toggle>();
+    }
+
+    private void OnDestroy()
+    {
+        
+    }
+
+    private void Update()
+    {
+
+    }
+
+
+    Vector2 vScroll = new Vector2();
+    private void OnGUI()
+    {
+        vScroll = EditorGUILayout.BeginScrollView(vScroll);
+        EditorGUILayout.BeginVertical();
+
+        EditorGUILayout.Separator();
+
+        using (new EditorGUILayout.HorizontalScope("box")) {
+            EditorGUILayout.PropertyField(s.FindProperty("go"));
+        }
+
+        if (go != null)
+        {
+            buttonList = SearchObject<Button>(go);
+            toggleList = SearchObject<Toggle>(go);
+        }
+        else
+        {
+            EditorGUILayout.HelpBox("请添加根级别物体!!!", MessageType.Error);
+        }
+
+        EditorGUILayout.Separator();
+
+        using (new EditorGUILayout.HorizontalScope("box"))
+        {
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("一键给Button添加ButtonSound组件"))
+            {
+                if (go != null)
+                {
+                    //buttonList = SearchObject<Button>(go);
+                    if (buttonList.Count > 0)
+                    {
+                        for (int i = 0; i < buttonList.Count; i++)
+                        {
+                            if (buttonList[i].GetComponent<GAMI.ButtonSound>() == null)
+                            {
+                                GAMI.ButtonSound bs = buttonList[i].gameObject.AddComponent<GAMI.ButtonSound>();
+
+
+                            }
+
+                        }
+                    }
+                }
+
+            }
+            if (GUILayout.Button("一键给Toggle添加ToggleSound组件"))
+            {
+                if (go != null) 
+                {
+                    //toggleList = SearchObject<Toggle>(go);
+                    if (toggleList.Count > 0)
+                    {
+                        for (int i = 0; i < toggleList.Count; i++)
+                        {
+                            if (toggleList[i].GetComponent<GAMI.ToggleSound>() == null)
+                            {
+                                GAMI.ToggleSound ts = toggleList[i].gameObject.AddComponent<GAMI.ToggleSound>();
+
+                            }
+
+                        }
+                    }
+
+
+                }
+
+            }
+
+            EditorGUILayout.EndHorizontal();
+        }
+
+        #region 绘制找到的物体
+        using (new EditorGUILayout.HorizontalScope("box")) {
+           
+            using (new EditorGUILayout.VerticalScope("box"))
+            {
+                EditorGUILayout.LabelField("Button:" + buttonList.Count.ToString());
+                if (go != null)
+                {
+                    if (buttonList != null)
+                    {
+                        foreach (var item in buttonList)
+                        {
+                            using (new EditorGUILayout.HorizontalScope("box"))
+                            {
+                                if (GUILayout.Button(item.gameObject.name, EditorStyles.label))
+                                {
+                                    EditorGUIUtility.PingObject(item.gameObject);
+                                    Selection.activeObject = item.gameObject;
+                                }
+                            }
+                        }
+                    }
+                }
+
+            }
+            using (new EditorGUILayout.VerticalScope("box"))
+            {
+                EditorGUILayout.LabelField("Toggle:" + toggleList.Count.ToString());
+                if (go != null)
+                {
+                    if (toggleList != null)
+                    {
+                        foreach (var item in toggleList)
+                        {
+                            using (new EditorGUILayout.HorizontalScope("box"))
+                            {
+                                if (GUILayout.Button(item.gameObject.name, EditorStyles.label))
+                                {
+                                    EditorGUIUtility.PingObject(item.gameObject);
+                                    Selection.activeObject = item.gameObject;
+                                }
+                            }
+                        }
+                    }
+                }
+
+
+            }
+        }
+        
+        #endregion
+        EditorGUILayout.EndVertical();
+        
+        s.ApplyModifiedProperties();
+
+        EditorGUILayout.EndScrollView();
+    }
+
+
+    public List<T> SearchObject<T>(GameObject go)
+    {
+        List<T> goLis = new List<T>();
+        T[] tArray = go.GetComponentsInChildren<T>(true);
+        if (tArray != null)
+        {
+            for (int i = 0; i < tArray.Length; i++)
+            {
+                goLis.Add(tArray[i]);
+            }
+        }
+        return goLis;
+    
+    }
+
+
+
+
+}

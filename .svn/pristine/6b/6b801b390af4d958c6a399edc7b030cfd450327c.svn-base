@@ -1,0 +1,464 @@
+using UnityEngine;
+using System.Collections.Generic;
+using System.IO;
+using System.Net;
+using System;
+using System.Text;
+using System.Threading;
+
+namespace GAMI
+{
+
+    public sealed class AudioManager
+    {
+        #region Singleton
+        private static readonly AudioManager instance = new AudioManager();
+
+        static AudioManager()
+        {
+        }
+
+        private AudioManager()
+        {
+        }
+
+        public static AudioManager Instance
+        {
+            get
+            {
+                return instance;
+            }
+        }
+        #endregion
+
+        private GameObject globalAudioGameObject;//2d全局物体也是2d声音listener，用于初始化及播放音乐、UI等2d声音
+        public GameObject GlobalAudioGameObject 
+        {
+            get { return globalAudioGameObject; }       
+        }
+
+        private GAMI.AudioListener default3DAudioListener;//默认的 3D AudioListener
+
+        public GAMI.AudioListener Default3DAudioListener 
+        {
+            get { return default3DAudioListener; }       
+        }
+
+        public bool isInited = false;
+
+
+        public void Init(bool SetMainCameraIsDefault3DListener = true)
+        {
+            if (!isInited)
+            {
+                globalAudioGameObject = new GameObject("AudioManager");
+                AkInitializer initializer = globalAudioGameObject.AddComponent<AkInitializer>();
+                
+                globalAudioGameObject.AddComponent<GlobalAudioGameObject>();
+                
+                if (SetMainCameraIsDefault3DListener && Camera.main != null)
+                {
+                    AddDefault3DListenerTo(Camera.main.gameObject);
+                }
+                isInited = true;
+            }
+        }
+
+
+
+        //void Callback(object in_cookie, AkCallbackType in_type, AkCallbackInfo in_info)
+        //{
+        //    switch (in_type)
+        //    {
+        //        case AkCallbackType.AK_EndOfEvent:
+        //            if (in_cookie != null)
+        //            {
+        //                AudioCtrl.EventCallback cb = (AudioCtrl.EventCallback)in_cookie;
+        //                cb();
+        //            }
+        //            break;
+        //        case AkCallbackType.AK_Marker:
+        //            AkMarkerCallbackInfo info = in_info as AkMarkerCallbackInfo;
+        //            AkSoundEngine.Log(info.strLabel);
+        //            break;
+        //        default:
+        //            //AkSoundEngine.LogError("Callback Type not march.");
+        //            break;
+        //    }
+        //}
+
+        public uint PlaySound(string eventName, GameObject gameObj)
+        {
+            uint playingID = AkSoundEngine.AK_INVALID_PLAYING_ID;
+            if (!string.IsNullOrEmpty(eventName))
+            {
+                playingID = AkSoundEngine.PostEvent(eventName, gameObj);
+            }
+            return playingID;
+        }
+
+        public uint PlaySound(uint eventID, GameObject gameObj)
+        {
+            uint playingID = AkSoundEngine.AK_INVALID_PLAYING_ID;
+            if (eventID != 0)
+            {
+                playingID = AkSoundEngine.PostEvent(eventID, gameObj);
+            }
+            return playingID;
+        }
+
+        public uint PlaySound2D(string eventName)
+        {
+            uint playingID = AkSoundEngine.AK_INVALID_PLAYING_ID;
+            if (!string.IsNullOrEmpty(eventName))
+            {
+                playingID = AkSoundEngine.PostEvent(eventName, globalAudioGameObject);
+            }
+            return playingID;
+        }
+
+        //public uint PlaySound(string eventName,AudioCtrl.EventCallback cb)
+        //{
+        //    uint playingID = AkSoundEngine.AK_INVALID_PLAYING_ID;
+        //    if (!string.IsNullOrEmpty(eventName))
+        //        playingID = AkSoundEngine.PostEvent(eventName, GlobalSoundObject, (uint)AkCallbackType.AK_EndOfEvent, Callback, cb);
+        //    return playingID;
+        //}
+
+        public AKRESULT StopSound(string eventName, GameObject gameObj, int transitionDuration = 300,
+            AkCurveInterpolation curveInterpolation = AkCurveInterpolation.AkCurveInterpolation_Linear)
+        {
+            if (!string.IsNullOrEmpty(eventName))
+            {
+                transitionDuration = Mathf.Clamp(transitionDuration, 0, 10000);
+                if (gameObj != null)
+                {
+                    AKRESULT result = AkSoundEngine.ExecuteActionOnEvent(eventName, AkActionOnEventType.AkActionOnEventType_Stop,
+                                    gameObj, transitionDuration, curveInterpolation);
+                    return result;
+                }
+            }
+            return AKRESULT.AK_Fail;
+        }
+
+        public AKRESULT StopSound(uint eventID, GameObject gameObj, int transitionDuration = 300,
+            AkCurveInterpolation curveInterpolation = AkCurveInterpolation.AkCurveInterpolation_Linear)
+        {
+            transitionDuration = Mathf.Clamp(transitionDuration, 0, 10000);
+            if (gameObj != null)
+            {
+                AKRESULT result = AkSoundEngine.ExecuteActionOnEvent(eventID, AkActionOnEventType.AkActionOnEventType_Stop,
+                                    gameObj, transitionDuration, curveInterpolation);
+                return result;
+            }
+            return AKRESULT.AK_Fail;
+        }
+
+        public AKRESULT StopSound2D(string eventName, int transitionDuration = 300,
+            AkCurveInterpolation curveInterpolation = AkCurveInterpolation.AkCurveInterpolation_Linear)
+        {
+            if (!string.IsNullOrEmpty(eventName))
+            {
+                transitionDuration = Mathf.Clamp(transitionDuration, 0, 10000);
+                AKRESULT result = AkSoundEngine.ExecuteActionOnEvent(eventName, AkActionOnEventType.AkActionOnEventType_Stop,
+                                globalAudioGameObject, transitionDuration, curveInterpolation);
+                return result;
+            }
+            return AKRESULT.AK_Fail;
+        }
+
+        public void StopAll()
+        {
+            if (AkSoundEngine.IsInitialized())
+                AkSoundEngine.StopAll();
+        }
+
+        public AKRESULT SetState(string stateGroup, string state)
+        {
+            AKRESULT res = AkSoundEngine.SetState(stateGroup, state);
+            return res;
+        }
+
+        public AKRESULT SetState(int stateGroupID, int stateValueID)
+        {
+            AKRESULT res = AkSoundEngine.SetState((uint)stateGroupID, (uint)stateValueID);
+            return res;
+        }
+
+        public AKRESULT SetSwitch(string switchGroup, string switchName, GameObject go) 
+        {
+            return AkSoundEngine.SetSwitch(switchGroup, switchName, go);    
+        }
+
+        public void LoadBank(string bankName)
+        {
+            if (!string.IsNullOrEmpty(bankName))
+            {
+                AkBankManager.LoadBank(bankName, false, false);
+            }
+        }
+
+        public void UnloadBank(string bankName)
+        {
+            if (!string.IsNullOrEmpty(bankName))
+            {
+                AkBankManager.UnloadBank(bankName);
+            }
+        }
+
+#region VolumeControl
+
+        private const float minVolume = 0.0f;
+        private const float maxVolume = 100.0f;
+
+        public struct VolumeParam
+        {
+            public static string SoundVolume = "Sound_Volume";
+            public static string VoiceVolume = "Voice_Volume";
+            public static string MusicVolume = "Music_Volume";
+        }
+
+        public void SetSoundVolume(float volume)
+        {
+            volume = Mathf.Clamp(volume, minVolume, maxVolume);
+            AkSoundEngine.SetRTPCValue(VolumeParam.SoundVolume, volume);
+        }
+        public void SetVoiceVolume(float volume)
+        {
+            volume = Mathf.Clamp(volume, minVolume, maxVolume);
+            AkSoundEngine.SetRTPCValue(VolumeParam.VoiceVolume, volume);
+        }
+        public void SetMusicVolume(float volume)
+        {
+            volume = Mathf.Clamp(volume, minVolume, maxVolume);
+            AkSoundEngine.SetRTPCValue(VolumeParam.MusicVolume, volume);
+        }
+
+
+        #endregion
+
+        #region AudioBusOnOffControl
+        public struct AudioBusOnOff 
+        {
+            public static string Sound_On = "Sound_On";// mute bus event,Global Scope
+            public static string Sound_Off = "Sound_Off";
+            public static string Voice_On = "Voice_On";
+            public static string Voice_Off = "Voice_Off";
+            public static string Music_On = "Music_On";
+            public static string Music_Off = "Music_Off";
+            public static string Main_On = "Main_On";
+            public static string Main_Off = "Main_Off";
+        }
+
+        /// <summary>
+        /// 音效的打开、关闭
+        /// </summary>
+        /// <param name="isOn"></param>
+        public void SetSoundOn(bool isOn)
+        {
+            PlaySound2D(isOn ? AudioBusOnOff.Sound_On : AudioBusOnOff.Sound_Off);
+        }
+
+        /// <summary>
+        /// 语音的打开、关闭
+        /// </summary>
+        /// <param name="isOn"></param>
+        public void SetVoiceOn(bool isOn)
+        {
+            PlaySound2D(isOn ? AudioBusOnOff.Voice_On : AudioBusOnOff.Voice_Off);
+        }
+        /// <summary>
+        /// 音乐的打开、关闭
+        /// </summary>
+        /// <param name="isOn"></param>
+        public void SetMusicOn(bool isOn)
+        {
+            PlaySound2D(isOn ? AudioBusOnOff.Music_On : AudioBusOnOff.Music_Off);
+        }
+
+        /// <summary>
+        /// 全部音频的打开、关闭
+        /// </summary>
+        /// <param name="isOn"></param>
+        public void SetMainOn(bool isOn)
+        {
+            PlaySound2D(isOn ? AudioBusOnOff.Main_On : AudioBusOnOff.Main_Off);
+        }
+
+
+        #endregion
+
+        public void PostEvents(AK.Wwise.Event[] events, GameObject obj)
+        {
+            if (AkSoundEngine.IsInitialized() && events != null)
+            {
+                for (int i = 0; i < events.Length; i++)
+                {
+                    events[i].Post(obj);
+                }
+            }
+        }
+
+        public void PostEvents(AK.Wwise.Event[] events)
+        {
+            if (AkSoundEngine.IsInitialized() && events != null)
+            {
+                for (int i = 0; i < events.Length; i++)
+                {
+                    events[i].Post(globalAudioGameObject);
+                }
+            }
+        }
+
+
+        public AkAuxSendArray sendA = new AkAuxSendArray();
+        /// <summary>
+        /// 用于单一辅助轨道的动态发送
+        /// </summary>
+        /// <param name="auxReverbName"></param>
+        /// <param name="sendValue"></param>
+        /// <returns></returns>
+        public AKRESULT SetSingleReverbAux(string auxReverbName, GameObject emitterGo, float sendValue = 1.0f)
+        {
+            AKRESULT res = AKRESULT.AK_Fail;
+            if (AkSoundEngine.IsInitialized())
+            {
+                sendA.Reset();
+                if (!string.IsNullOrEmpty(auxReverbName))
+                {
+                    sendA.Add((uint)AkSoundEngine.GetIDFromString(auxReverbName), sendValue);
+                    res = AkSoundEngine.SetGameObjectAuxSendValues(emitterGo, sendA, (uint)sendA.Count());
+                }
+                else
+                {
+                    res = AkSoundEngine.SetGameObjectAuxSendValues(emitterGo, sendA, 0);
+                }
+               
+            }
+            return res;
+        }
+
+        #region AudioListener Module
+
+        /// <summary>
+        /// 重新指定某个Listener的position更新跟随overridePosition_Transform
+        /// </summary>
+        /// <param name="audioListener"></param>
+        /// <param name="overridePosition_Transform"></param>
+        public void SetAudioListenerPositionOverride(GAMI.AudioListener audioListener, Transform overridePosition_Transform)
+        {
+            if (audioListener != null && overridePosition_Transform != null)
+            {
+                audioListener.SetPositionOverride(overridePosition_Transform);
+            }
+        }
+
+        /// <summary>
+        /// 重新指定某个Listener的方向更新跟随overrideFowardUp_Transform
+        /// </summary>
+        /// <param name="audioListener"></param>
+        /// <param name="overrideFowardUp_Transform"></param>
+        public void SetAudioListenerFowardUpOverride(GAMI.AudioListener audioListener, Transform overrideFowardUp_Transform)
+        {
+            if (audioListener != null && overrideFowardUp_Transform != null)
+            {
+                audioListener.SetFowardUpOverride(overrideFowardUp_Transform);
+            }
+        }
+
+        /// <summary>
+        /// 获取listener的position
+        /// </summary>
+        /// <param name="audioListener"></param>
+        /// <returns></returns>
+        public Vector3 GetAudioListenerPosition(GAMI.AudioListener audioListener) 
+        {
+            Vector3 position = Vector3.zero;
+            if (audioListener != null) 
+            {
+                position = audioListener.GetPosition();
+            }
+            return position;
+        }
+
+        /// <summary>
+        /// 获取listener的Forward
+        /// </summary>
+        /// <param name="audioListener"></param>
+        /// <returns></returns>
+        public Vector3 GetAudioListenerForward(GAMI.AudioListener audioListener)
+        {
+            Vector3 forward = Vector3.forward;
+            if (audioListener != null)
+            {
+                forward = audioListener.GetForward();   
+            }
+            return forward;
+        }
+
+        /// <summary>
+        /// 获取listener的Up
+        /// </summary>
+        /// <param name="audioListener"></param>
+        /// <returns></returns>
+        public Vector3 GetAudioListenerUp(GAMI.AudioListener audioListener)
+        {
+            Vector3 up = Vector3.up;
+            if (audioListener != null)
+            {
+                up = audioListener.GetUp();
+            }
+            return up;
+        }
+
+
+        private static bool default3DListenerChanged = false;
+        private static ulong[] Default3DListenersList = { AkSoundEngine.AK_INVALID_GAME_OBJECT };//默认只允许有1个监听3d的listener，以最新指定的为准
+
+        /// <summary>
+        /// 添加一个默认得listener
+        /// </summary>
+        /// <param name="go"></param>
+        /// <returns></returns>
+        public GAMI.AudioListener AddDefault3DListenerTo(GameObject go)
+        {
+            GAMI.AudioListener mainListener = null;
+            if (go != null)
+            {
+                mainListener = go.AddComponent<GAMI.AudioListener>();
+                mainListener.SetIsDefaultListener(true);
+                default3DAudioListener = mainListener;
+                Default3DListenersList[0] = AkSoundEngine.GetAkGameObjectID(go);
+                default3DListenerChanged = true;
+            }
+            return mainListener;
+        }
+
+
+
+        public void RefreshDefault3DAudioListener()
+        {
+            if (default3DListenerChanged)
+            {
+                default3DListenerChanged = false;
+                AkSoundEngine.SetDefaultListeners(Default3DListenersList, 1);//默认只允许有1个监听3d的listener
+            }
+            
+        }
+
+
+
+
+
+
+
+
+
+
+
+        #endregion
+
+
+
+    }
+}

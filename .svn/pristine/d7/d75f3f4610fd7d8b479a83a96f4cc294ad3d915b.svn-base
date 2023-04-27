@@ -1,0 +1,216 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEditor;
+using UnityEngine.UI;
+using System;
+using System.Linq;
+using UnityEngine.Playables;
+using GAMI;
+using UnityEngine.Video;
+
+public class QuickSearchWwiseAudioComp : EditorWindow
+{
+    public GameObject go;
+    private SerializedObject s;
+    List<Component> allCps;
+
+    [MenuItem("GAMI/Tools/UI配置助手")]
+    public static void ShowWindow()
+    {
+        QuickSearchWwiseAudioComp ep = ScriptableWizard.GetWindow<QuickSearchWwiseAudioComp>(false);
+        ep.titleContent = new GUIContent("UI配置助手");
+        ep.Show();
+
+    }
+
+    private void Awake()
+    {
+        s = new SerializedObject(this);
+        allCps = new List<Component>();
+    }
+
+    private void OnDestroy()
+    {
+
+    }
+
+    private void Update()
+    {
+
+    }
+
+
+
+    Vector2 vScroll = new Vector2();
+    private void OnGUI()
+    {
+        vScroll = EditorGUILayout.BeginScrollView(vScroll);
+        EditorGUILayout.BeginVertical();
+
+        EditorGUILayout.Separator();
+
+        using (new EditorGUILayout.HorizontalScope("box")) {
+            EditorGUILayout.PropertyField(s.FindProperty("go"));
+        }
+
+        if (go != null)
+        {
+            allCps = SearchObjects(go, 
+                typeof(Button),
+                typeof(Toggle),
+                typeof(Slider),
+                typeof(Dropdown),
+                typeof(PlayableDirector)
+                 // , typeof(Text)*/
+
+                );//扩展点 1
+        }
+        else
+        {
+            EditorGUILayout.HelpBox("请添加根级别物体!!!", MessageType.Error);
+        }
+
+        EditorGUILayout.Separator();
+
+        if (allCps != null)
+        {
+            ShowAddAudioButton<Button>("一键给Button添加ButtonSound组件", typeof(GAMI.ButtonSound));
+            ShowAddAudioButton<Toggle>("一键给Toggle添加ToggleSound组件", typeof(GAMI.ToggleSound));
+            ShowAddAudioButton<Slider>("一键给Slider添加SliderSound组件", typeof(GAMI.SliderSound));
+            ShowAddAudioButton<Dropdown>("一键给Dropdown添加DropdownSound组件", typeof(GAMI.DropdownSound));
+            //扩展点 2
+        }
+
+        #region 绘制找到的物体
+        using (new EditorGUILayout.HorizontalScope("box")) {
+            if (allCps != null)
+            {
+                ShowUIComponnet<Button, ButtonSound>();
+                ShowUIComponnet<Toggle, ToggleSound>();
+                ShowUIComponnet<Slider, SliderSound>();
+                ShowUIComponnet<Dropdown, DropdownSound>();
+                ShowUIComponnet<PlayableDirector>();
+                //ShowUIComponnet<Text>();
+                //扩展点 3
+            }
+
+        }
+
+        #endregion
+        EditorGUILayout.EndVertical();
+
+        s.ApplyModifiedProperties();
+        EditorGUILayout.EndScrollView();
+    }
+
+
+    public List<T> SearchObjects<T>(GameObject go)
+    {
+        List<T> goLis = new List<T>();
+        T[] tArray = go.GetComponentsInChildren<T>(true);
+        if (tArray != null)
+        {
+            for (int i = 0; i < tArray.Length; i++)
+            {
+                goLis.Add(tArray[i]);
+            }
+        }
+        return goLis;
+
+    }
+
+    public List<Component> SearchObjects(GameObject go, params Type[] tS)
+    {
+        List<Component> goLis = new List<Component>();
+        for (int i = 0; i < tS.Length; i++)
+        {
+            Component[] tArray = go.GetComponentsInChildren(tS[i], true);
+            if (tArray != null) { goLis.AddRange(tArray.ToList()); }
+        }
+
+        return goLis;
+    }
+
+    private void ShowUIComponnet<T1>() where T1 : Component
+    {
+        if (allCps == null || allCps.Count <= 0) { return; }
+        List<T1> UIComponnets = allCps.OfType<T1>().ToList();
+        if (UIComponnets == null || UIComponnets.Count <= 0) { return; }
+
+        using (new EditorGUILayout.VerticalScope("box"))
+        {
+            EditorGUILayout.LabelField(typeof(T1).Name + ":" + UIComponnets.Count.ToString());
+            if (UIComponnets != null)
+            {
+                foreach (var item in UIComponnets)
+                {
+                    using (new EditorGUILayout.HorizontalScope("box"))
+                    {
+                        if (GUILayout.Button(item.gameObject.name, EditorStyles.label))
+                        {
+                            EditorGUIUtility.PingObject(item.gameObject);
+                            Selection.activeObject = item.gameObject;
+                        }
+                    }
+                }
+            }
+
+        }
+    }
+    private void ShowUIComponnet<T1, GAMISound>() where T1 : Component where GAMISound : MonoBehaviour
+    {
+        if (allCps == null || allCps.Count <= 0) { return; }
+        List<T1> UIComponnets = allCps.OfType<T1>().ToList();
+        if (UIComponnets == null || UIComponnets.Count <= 0) { return; }
+
+        using (new EditorGUILayout.VerticalScope("box"))
+        {
+            EditorGUILayout.LabelField(typeof(T1).Name+ ":" + UIComponnets.Count.ToString());
+            if (UIComponnets != null)
+            {
+                foreach (var item in UIComponnets)
+                {
+                    using (new EditorGUILayout.HorizontalScope("box"))
+                    {
+                        bool hasSoundCompoent = item.gameObject.GetComponent<GAMISound>() != null;
+                        if (GUILayout.Button(hasSoundCompoent ? item.gameObject.name + "(******)" : item.gameObject.name, EditorStyles.label))
+                        {
+                            EditorGUIUtility.PingObject(item.gameObject);
+                            Selection.activeObject = item.gameObject;
+                        }
+                    }
+                }
+            }
+
+        }
+    }
+
+    private void ShowAddAudioButton<T>(string buttonText, Type GAMIForAdd) where T : Component
+    {
+        if (allCps == null || allCps.Count <= 0) { return; }
+        List<T> gos = allCps.OfType<T>().ToList();
+        if (gos == null || gos.Count <= 0) { return; }        
+        if (GUILayout.Button(buttonText))
+        {
+            for (int i = 0; i < gos.Count; i++)
+            {
+                if (gos[i].GetComponent(GAMIForAdd) == null)
+                {
+                    var ts = gos[i].gameObject.AddComponent(GAMIForAdd);
+
+                }
+
+            }
+        }
+
+    }
+
+
+
+
+
+
+
+
+}

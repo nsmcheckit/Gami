@@ -1,0 +1,123 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEditor;
+using UnityEngine;
+
+public class WwisePlaybacker : EditorWindow
+{
+
+
+    enum PlayBackeState 
+    {
+        Record,
+        CompleteRecord,
+        Play,
+        Pause,
+        Resume,
+        Stop,
+  
+    }
+
+    PlayBackeState playBackerState;
+
+    [MenuItem("GAMI/Tools/Playbacker")]
+    public static void ShowWindow() 
+    {
+        WwisePlaybacker wwisePlaybacker = GetWindow<WwisePlaybacker>();
+        wwisePlaybacker.Show();
+    }
+
+    float a = 0;
+
+    Color color = Color.white;
+
+    bool isStartRecording = false;
+    string playPauseButtonIcon = "d_Animation.Play";
+
+    private void OnGUI()
+    {
+        GUI.contentColor = Color.green;
+        EditorGUILayout.LabelField(new GUIContent(playBackerState.ToString()), EditorStyles.centeredGreyMiniLabel, GUILayout.Height(66f));
+        GUI.contentColor = Color.white;
+
+        GUI.backgroundColor = color;
+        
+        EditorGUILayout.BeginHorizontal();
+        if (GUILayout.Button(EditorGUIUtility.IconContent("d_Animation.Record")))
+        {
+            isStartRecording = !isStartRecording;
+            color = isStartRecording ? Color.red : Color.white;
+            this.ShowNotification(new GUIContent(playBackerState.ToString()));
+            playBackerState = PlayBackeState.Record;
+        }
+        if (GUILayout.Button(EditorGUIUtility.IconContent("d_Animation.FirstKey")))
+        {
+
+        }
+        if (GUILayout.Button(EditorGUIUtility.IconContent("d_Animation.PrevKey")))
+        {
+
+        }
+        if (GUILayout.Button(EditorGUIUtility.IconContent(playPauseButtonIcon)))
+        {
+            playPauseButtonIcon = playPauseButtonIcon.Equals("d_Animation.Play") ? "d_PauseButton" : "d_Animation.Play";
+            playBackerState = playBackerState == PlayBackeState.Play ? PlayBackeState.Pause : PlayBackeState.Play;
+
+
+
+
+        }
+        if (GUILayout.Button(EditorGUIUtility.IconContent("d_Animation.NextKey")))
+        {
+
+        }
+        if (GUILayout.Button(EditorGUIUtility.IconContent("d_Animation.LastKey")))
+        {
+
+        }
+        EditorGUILayout.EndHorizontal();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        //a =GUI.Slider(new Rect(new Vector2(0, 100), new Vector2(1000, 1000)), 
+        //    a, 0, 0, 100, EditorStyles.miniButton, EditorStyles.miniButton, true, 0);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        GUI.backgroundColor = color;
+
+    }
+
+}

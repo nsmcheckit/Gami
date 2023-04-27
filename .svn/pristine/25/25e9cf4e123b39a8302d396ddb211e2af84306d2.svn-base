@@ -1,0 +1,108 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace GAMI 
+{
+    [DisallowMultipleComponent()]
+    [AddComponentMenu("GAMI/AmbientIDSound")]
+    public class AmbientIDSound : MonoBehaviour
+    {
+
+        [System.Serializable]
+        public class IDSound
+        {
+            public ulong goId;
+            public string goName;
+            public string soundName;
+            public AkMultiPositionType positionType;
+            public List<GAMI.WwisePositionTemplate> position;
+        }
+
+        public List<IDSound> aBIdSounds;
+
+        void OnEnable()
+        {
+            Debug.Log("sss" + gameObject.GetInstanceID());
+            foreach (IDSound sound in aBIdSounds)
+            {
+                Debug.Log(sound.GetHashCode());
+                Debug.Log((ulong)sound.GetHashCode());
+                sound.goId = (ulong)aBIdSounds.IndexOf(sound) + 1;
+                AKRESULT res = RegisterGoIdToWwise(sound.goId, sound.goName);
+                var positionArray = BuildAkPositionArray(sound.position);
+                AkSoundEngine.SetMultiplePositions(sound.goId, positionArray, (ushort)sound.position.Count, sound.positionType);
+                PlayAmbientSound(sound.soundName, sound.goId);
+            }
+
+        }
+
+        private void OnDisable()
+        {
+            foreach (var item in aBIdSounds)
+            {
+                StopAmbientSound(item.soundName, item.goId);
+                UnRegisterGoIdToWwise(item.goId);
+            }
+        }
+
+
+
+
+        private AKRESULT RegisterGoIdToWwise(ulong goId, string goName)
+        {
+            return AkSoundEngine.RegisterGameObjInternal_WithName(goId, goName);
+        }
+
+        private AKRESULT UnRegisterGoIdToWwise(ulong goId)
+        {
+            return AkSoundEngine.UnregisterGameObjInternal(goId);
+        }
+
+        /// <summary>
+        /// 生成多点位置数据
+        /// </summary>
+        /// <returns></returns>
+        private AkPositionArray BuildAkPositionArray(List<WwisePositionTemplate> positionList)
+        {
+            AkPositionArray playPostionArr = new AkPositionArray((uint)positionList.Count);
+            for (int i = 0; i < positionList.Count; i++)
+            {
+                WwisePositionTemplate temp = positionList[i];
+                playPostionArr.Add(temp.position,
+                    Quaternion.Euler(temp.rotation) * Vector3.forward,
+                    Quaternion.Euler(temp.rotation) * Vector3.up);
+            }
+            return playPostionArr;
+        }
+
+
+        public uint PlayAmbientSound(string soundEvent, ulong goId)
+        {
+            uint playingId = AkSoundEngine.AK_INVALID_PLAYING_ID;
+            if (AkSoundEngine.IsInitialized())
+            {
+                if (!string.IsNullOrEmpty(soundEvent))
+                {
+                    playingId = AkSoundEngine.PostEvent(soundEvent, goId);
+                }
+            }
+            return playingId;
+        }
+
+
+
+
+        public void StopAmbientSound(string soundEvent, ulong goId)
+        {
+            if (AkSoundEngine.IsInitialized())
+            {
+                AkSoundEngine.ExecuteActionOnEvent(soundEvent, AkActionOnEventType.AkActionOnEventType_Stop, goId);
+            }
+        }
+
+
+
+    }
+}
+

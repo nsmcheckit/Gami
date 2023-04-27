@@ -1,0 +1,19 @@
+{
+    "name": "GAMI.Runtime",
+    "references": [
+        "AK.Wwise.Unity.API",
+        "AK.Wwise.Unity.API.WwiseTypes",
+        "AK.Wwise.Unity.MonoBehaviour",
+        "Unity.Timeline",
+        "Unity.Recorder.Editor"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,0 +1,184 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using AK.Wwise;
+using System;
+
+namespace GAMI
+{
+    /// <summary>
+    /// 继承一层自己的AudioGameobject，不会动到wwise自己的集成代码。
+    /// 1、方便wwise的升级。
+    /// 2、方便后期在不动原始集成代码的情况下，扩展性能优化的逻辑
+    /// 3、扩展自己的逻辑，比如重写position或forward、up
+    /// </summary>
+    public class AudioGameObject : MonoBehaviour
+    {
+
+        #region Override Audio Position &Forward Up
+     
+        public bool overridePosition = false;//重新定义声音position的更新，默认关闭，通常是用于listener的设置.
+
+        [UnityEngine.SerializeField] private Transform t_overridePosition_Transform;
+        public Transform OverridePosition_Transform 
+        {  
+            set { t_overridePosition_Transform = value; }    
+        }
+   
+        public bool overrideFowardUp = false;//重新定义声音forward、up的更新，默认关闭，通常是用于listener的设置.
+
+        [UnityEngine.SerializeField] private Transform t_overrideFowardUp_Transform;
+        public Transform OverrideFowardUp_Transform 
+        {
+            set { t_overrideFowardUp_Transform = value; }
+        }
+
+        #endregion
+
+
+
+        public bool isEnvironmentAware = true;
+        public bool isStaticObject = false;
+        private Collider m_Collider;
+        private AkGameObjEnvironmentData m_envData;
+        private AkGameObjPositionData m_posData;
+
+        public AkGameObjPositionOffsetData m_positionOffsetData;
+
+        private bool isRegistered = false;
+
+        public static byte updateFram = 0;//更新帧率，后期性能优化用,可根据当前fps实时调整
+
+        public AKRESULT Register()
+        {
+            if (isRegistered)
+                return AKRESULT.AK_Success;
+            
+            isRegistered = true;
+            return AkSoundEngine.RegisterGameObj(gameObject, gameObject.name);
+        }
+
+        private void SetPosition()
+        {
+            var position = GetPosition();
+            var forward = GetForward();
+            var up = GetUpward();
+
+            if (m_posData != null)
+            {
+                if (m_posData.position == position && m_posData.forward == forward && m_posData.up == up)
+                    return;
+
+                m_posData.position = position;
+                m_posData.forward = forward;
+                m_posData.up = up;
+            }
+
+            AkSoundEngine.SetObjectPosition(gameObject, position, forward, up);
+        }
+
+        private void Awake()
+        {
+
+            if (!isStaticObject)
+                m_posData = new AkGameObjPositionData();
+
+            m_Collider = GetComponent<UnityEngine.Collider>();
+
+
+            if (Register() == AKRESULT.AK_Success)
+            {
+                SetPosition();
+
+                if (isEnvironmentAware)
+                {
+                    m_envData = new AkGameObjEnvironmentData();
+
+                    if (m_Collider)
+                        m_envData.AddAkEnvironment(m_Collider, m_Collider);
+
+                    m_envData.UpdateAuxSend(gameObject, transform.position);
+                }
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (AkSoundEngine.IsInitialized())
+                AkSoundEngine.UnregisterGameObj(gameObject);
+        }
+        
+
+        private void Update()
+        {
+            if (m_envData != null)
+                m_envData.UpdateAuxSend(gameObject, transform.position);
+
+            if (!isStaticObject)
+                SetPosition();
+        }
+
+
+        public Vector3 GetPosition()
+        {
+            if (overridePosition && t_overridePosition_Transform != null)
+            {
+                return t_overridePosition_Transform.position;
+            }
+            return transform.position;
+        }
+
+        public Vector3 GetForward()
+        {
+            if (overrideFowardUp && t_overrideFowardUp_Transform != null)
+            {
+                return t_overrideFowardUp_Transform.forward;
+            }
+            return transform.forward;
+        }
+
+        public Vector3 GetUpward()
+        {
+            if (overrideFowardUp && t_overrideFowardUp_Transform != null)
+            {
+                return t_overrideFowardUp_Transform.up;
+            }
+            return transform.up;
+        }
+
+
+
+
+        private void OnTriggerEnter(UnityEngine.Collider other)
+        {
+            if (isEnvironmentAware && m_envData != null)
+                m_envData.AddAkEnvironment(other, m_Collider);
+        }
+
+        private void OnTriggerExit(UnityEngine.Collider other)
+        {
+            if (isEnvironmentAware && m_envData != null)
+                m_envData.RemoveAkEnvironment(other, m_Collider);
+        }
+
+
+#if UNITY_EDITOR
+        public void OnDrawGizmosSelected()
+        {
+            if (AkUtilities.IsMigrating)
+                return;
+
+            var position = GetPosition();
+            UnityEngine.Gizmos.DrawIcon(position, "WwiseAudioSpeaker.png", false);
+        }
+#endif
+
+
+
+
+
+    }
+
+}
+
+

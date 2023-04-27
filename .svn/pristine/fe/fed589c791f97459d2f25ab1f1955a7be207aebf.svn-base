@@ -1,0 +1,182 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using Unity.Plastic.Newtonsoft.Json.Linq;
+using UnityEditor;
+using UnityEngine;
+
+
+struct LogWwiseEventItem 
+{
+    int time;
+    List<string> names;
+}
+public class WwisePlaybacker : EditorWindow
+{
+
+
+    enum PlayBackeState
+    {
+        Record,
+        CompleteRecord,
+        Play,
+        Pause,
+        Resume,
+        Stop,
+
+    }
+
+    PlayBackeState playBackerState;
+    Queue<LogWwiseEventItem> eventQueue;
+
+    float a = 0;
+
+    Color color = Color.white;
+
+    bool isStartRecording = false;
+    string playPauseButtonIcon = "d_Animation.Play";
+
+    [MenuItem("GAMI/Tools/Playbacker")]
+    public static void ShowWindow()
+    {
+        WwisePlaybacker wwisePlaybacker = GetWindow<WwisePlaybacker>();
+        wwisePlaybacker.Show();
+    }
+
+
+    private void Awake()
+    {
+        eventQueue = new Queue<LogWwiseEventItem>();    
+    }
+
+
+    private void OnGUI()
+    {
+        GUI.contentColor = Color.green;
+        EditorGUILayout.LabelField(new GUIContent(playBackerState.ToString()), EditorStyles.centeredGreyMiniLabel, GUILayout.Height(66f));
+        GUI.contentColor = Color.white;
+
+        GUI.backgroundColor = color;
+
+        EditorGUILayout.BeginHorizontal();
+        if (GUILayout.Button(EditorGUIUtility.IconContent("d_Animation.Record")))
+        {
+            isStartRecording = !isStartRecording;
+            color = isStartRecording ? Color.red : Color.white;
+            this.ShowNotification(new GUIContent(playBackerState.ToString()));
+            playBackerState = PlayBackeState.Record;
+
+        }
+        if (GUILayout.Button(EditorGUIUtility.IconContent("d_Animation.FirstKey")))
+        {
+
+        }
+        if (GUILayout.Button(EditorGUIUtility.IconContent("d_Animation.PrevKey")))
+        {
+
+        }
+        if (GUILayout.Button(EditorGUIUtility.IconContent(playPauseButtonIcon)))
+        {
+            playPauseButtonIcon = playPauseButtonIcon.Equals("d_Animation.Play") ? "d_PauseButton" : "d_Animation.Play";
+            playBackerState = playBackerState == PlayBackeState.Play ? PlayBackeState.Pause : PlayBackeState.Play;
+
+
+
+
+        }
+        if (GUILayout.Button(EditorGUIUtility.IconContent("d_Animation.NextKey")))
+        {
+
+        }
+        if (GUILayout.Button(EditorGUIUtility.IconContent("d_Animation.LastKey")))
+        {
+            StartWwiseEventCapture();
+
+        }
+        EditorGUILayout.EndHorizontal();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        //a =GUI.Slider(new Rect(new Vector2(0, 100), new Vector2(1000, 1000)), 
+        //    a, 0, 0, 100, EditorStyles.miniButton, EditorStyles.miniButton, true, 0);
+
+
+
+
+
+        GUI.backgroundColor = color;
+
+    }
+
+
+
+
+    public void StartWwiseEventCapture()
+    {
+        //WaapiManager.OnCaptureLogItemAdded(new string[] { Profiler_Log_Item_Type.Event }, 
+        //    (string json) => 
+        //    { 
+        //        Debug.Log(json);
+        //        var eventObj = WaapiManager.StringToObject(json);
+        //        //string time = eventObj["time"].ToString();
+        //        //string name = eventObj["objectName"].ToString();
+                
+        //        //Debug.Log(time + "-" + name);
+
+        //    }
+        //    );
+    }
+
+    public void StopWwiseEventCapture()
+    {
+
+    }
+
+
+    public void Play()
+    {
+
+    }
+
+    public void Pause() 
+    {
+    
+    }
+
+
+    public void Resume() 
+    {
+    
+    }
+
+    public void Stop() 
+    {
+    
+    }
+
+
+    public void BuildEventRelativeTime() 
+    {
+    
+    }
+
+
+
+
+}

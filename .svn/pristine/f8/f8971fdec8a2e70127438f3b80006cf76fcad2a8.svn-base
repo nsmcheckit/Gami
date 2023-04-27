@@ -1,0 +1,240 @@
+﻿using GAMI;
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using Unity.Plastic.Newtonsoft.Json;
+using Unity.Plastic.Newtonsoft.Json.Linq;
+using UnityEditor;
+using UnityEngine;
+
+public class GamiCommonTools
+{
+
+    /// <summary>
+    /// 通用函数
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    public static void ExportAllSoundComponentsToJson<T>() where T : Component, new ()
+    {
+        var list_SoundConfigData = SoundToolsUtility.GetSoundComponentsConfigDataInProject<T>();
+        string json = SoundToolsUtility.ConvertListToJson(list_SoundConfigData);
+        string filePath = Application.persistentDataPath + "/" + typeof(T).Name + SoundToolsUtility.GetNowTimeToString() + ".json";
+        File.WriteAllText(filePath, json, System.Text.Encoding.UTF8);
+        if (File.Exists(filePath))
+        {
+            EditorUtility.RevealInFinder(filePath);
+        }
+    }
+
+    /// <summary>
+    /// 导入通用函数
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    public static void ImportAllSoundComponnetFromJson<T>() where T : Component, new() 
+    {
+        string filePath = EditorUtility.OpenFilePanelWithFilters("加载", Application.dataPath, new string[] { typeof(T).Name, "json" });
+        if (string.IsNullOrEmpty(filePath)) { return; }
+
+        if (File.Exists(filePath))
+        {
+            string jsData = File.ReadAllText(filePath, System.Text.Encoding.UTF8);
+            JObject jo = JObject.Parse(jsData);
+            JArray list_Config = (JArray)jo["items"];
+
+            if (list_Config != null)
+            {
+                for (int i = 0; i < list_Config.Count; i++)
+                {                  
+                    JObject ja = (JObject)(list_Config[i]);
+                    string typeName = ja["typeName"].Value<string>();
+
+                    if (typeName != typeof(T).Name) { break; }
+
+                    string prefabPath = ja["prefabPath"].Value<string>();
+                    string selfPath = ja["selfHirarchyPath"].Value<string>();
+
+                    T bS = ja["audioComponent"].ToObject<T>();
+
+                    GameObject go = AssetDatabase.LoadAssetAtPath<Object>(prefabPath) as GameObject;
+                    var transform = SoundToolsUtility.GetChildByHierarchyPath(go.transform, selfPath);
+
+                    T b = transform.gameObject.GetComponent<T>();
+                    FieldInfo[] fields = typeof(T).GetFields();
+                    fields = fields.Where((FieldInfo f) => { return f.IsPublic && !f.IsNotSerialized; }).ToArray<FieldInfo>();
+
+                    if (b == null)
+                    {
+                        T newB = transform.gameObject.AddComponent<T>();
+                        foreach (var item in fields)
+                        {
+                            var v = item.GetValue(bS);
+                            item.SetValue(newB, v);
+                        }
+                    }
+                    else
+                    {
+                        foreach (var item in fields)
+                        {
+                            var v = item.GetValue(bS);
+                            item.SetValue(b, v);
+                        }
+                    }
+
+                    if (EditorUtility.DisplayCancelableProgressBar(typeof(T).Name, prefabPath + ":" + selfPath,
+                        (float)i / list_Config.Count) || i >= list_Config.Count - 1)
+                    {
+                        EditorUtility.ClearProgressBar();
+                        break;
+                    }
+                    
+                     PrefabUtility.SavePrefabAsset(go);
+                    //EditorUtility.SetDirty(go);
+                    // AssetDatabase.SaveAssets();
+                    //AssetDatabase.Refresh();
+
+                }
+
+            }
+
+        }
+
+
+    }
+
+
+
+    #region 导入导出
+    [MenuItem("GAMI/配置信息/ButtonSound/导出")]
+    public static void ExportButtonSound() 
+    {
+        ExportAllSoundComponentsToJson<ButtonSound>();   
+    }
+
+    [MenuItem("GAMI/配置信息/ButtonSound/导入")]
+    public static void ImportButtonSound()
+    {
+        ImportAllSoundComponnetFromJson<ButtonSound>();
+
+    }
+
+
+    [MenuItem("GAMI/配置信息/ToggleSound/导出")]
+    public static void ExportToggleSound()
+    {
+        ExportAllSoundComponentsToJson<ToggleSound>();
+    }
+
+    [MenuItem("GAMI/配置信息/ToggleSound/导入")]
+    public static void ImportToggleSound()
+    {
+        ImportAllSoundComponnetFromJson<ToggleSound>();
+    }
+
+    [MenuItem("GAMI/配置信息/EffectSound/导出")]
+    public static void ExportEffectSound()
+    {
+        ExportAllSoundComponentsToJson<EffectSound>();
+    }
+
+
+    [MenuItem("GAMI/配置信息/EffectSound/导入")]
+    public static void ImportEffectSound()
+    {
+        ImportAllSoundComponnetFromJson<EffectSound>();
+    }
+
+
+    [MenuItem("GAMI/配置信息/SliderSound/导出")]
+    public static void ExportSliderSound()
+    {
+        ExportAllSoundComponentsToJson<SliderSound>();
+    }
+
+
+    [MenuItem("GAMI/配置信息/SliderSound/导入")]
+    public static void ImportSliderSound()
+    {
+        ImportAllSoundComponnetFromJson<SliderSound>();
+    }
+
+
+
+    [MenuItem("GAMI/配置信息/LoadBanks/导出")]
+    public static void ExportLoadBanks()
+    {
+        ExportAllSoundComponentsToJson<LoadBanks>();
+    }
+
+
+    [MenuItem("GAMI/配置信息/LoadBanks/导入")]
+    public static void ImportLoadBanks()
+    {
+        ImportAllSoundComponnetFromJson<LoadBanks>();
+    }
+
+    [MenuItem("GAMI/配置信息/AmbientIDSound/导出")]
+    public static void ExportAmbientIDSound()
+    {
+        ExportAllSoundComponentsToJson<AmbientIDSound>();
+    }
+
+
+    [MenuItem("GAMI/配置信息/AmbientIDSound/导入")]
+    public static void ImportAmbientIDSound()
+    {
+        ImportAllSoundComponnetFromJson<AmbientIDSound>();
+    }
+
+    #endregion
+
+    #region 快速访问
+    [MenuItem("Assets/GAMI/AkWwiseProjectData.asset")]
+    [MenuItem("GAMI/快速访问/AkWwiseProjectData.asset")]
+    static void OpenAkWwiseProjectDataAsset()
+    {
+        SoundToolsUtility.SelectObjectInProjectView("AkWwiseProjectData", ".asset");
+    }
+
+
+    [MenuItem("GAMI/快速访问/AkWwiseInitializationSettings.asset")]
+    static void OpenAkWwiseInitializationSettingsAsset()
+    {
+        SoundToolsUtility.SelectObjectInProjectView("AkWwiseInitializationSettings", ".asset");
+    }
+
+    [MenuItem("GAMI/快速访问/GAMI Scripts.cs")]
+    [MenuItem("Assets/GAMI/GAMI Scripts.cs")]
+    static void OpenGAMISoundCS()
+    {
+        SoundToolsUtility.SelectObjectInProjectView("EffectSound", ".cs");
+    }
+
+    [MenuItem("GAMI/快速访问/WwiseProject Originals Folder")]
+    [MenuItem("Assets/GAMI/WwiseProject Originals Folder")]
+    static void OpenWwisePeojectOriginalsFolder()
+    {
+        string wwiseProjectOriginalsPath = SoundToolsUtility.WwisePeojectDirectoryPath + "/Originals/";
+        EditorUtility.RevealInFinder(wwiseProjectOriginalsPath);
+    }
+
+
+    [MenuItem("GAMI/快速访问/GeneratedSoundBanks Folder")]
+    [MenuItem("Assets/GAMI/GeneratedSoundBanks Folder")]
+    static void OpenGeneratedSoundBanksFolder()
+    {
+        string wwiseProjectOriginalsPath = SoundToolsUtility.WwisePeojectDirectoryPath + "/GeneratedSoundBanks/";
+        EditorUtility.RevealInFinder(wwiseProjectOriginalsPath);
+    }
+
+
+    [MenuItem("GAMI/快速访问/StreamingAssets Folder")]
+    [MenuItem("Assets/GAMI/StreamingAssets Folder")]
+    static void OpenStreamingAssetsFolder()
+    {
+        EditorUtility.RevealInFinder(Application.streamingAssetsPath);
+    }
+
+    #endregion
+}

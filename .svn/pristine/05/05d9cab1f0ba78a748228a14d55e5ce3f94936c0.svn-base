@@ -1,0 +1,122 @@
+﻿#define WWISE_SUPPORT_UNITYRECORDER
+
+#if WWISE_SUPPORT_UNITYRECORDER
+using System.Collections;
+using System.Collections.Generic;
+using UnityEditor;
+using UnityEngine;
+using UnityEditor.Recorder;
+using UnityEditor.Recorder.Input;
+using System;
+
+public class RecorderTool : EditorWindow
+{
+
+    RecorderController m_RecorderController;
+    public MovieRecorderSettings m_Settings = null;
+    public RecorderControllerSettings controllerSettings;
+    private SerializedObject s;
+
+    [MenuItem("lllll/ss")]
+    public static void OpenWindow() 
+    {
+        GetWindow<RecorderTool>();
+        
+    }
+
+    public void Awake()
+    {
+        Init();
+        s = new SerializedObject(this);
+    }
+    private void OnGUI()
+    {
+        s.Update();
+        EditorGUILayout.PropertyField(s.FindProperty("m_Settings"));
+        var e = Editor.CreateEditor(m_Settings);
+        e.OnInspectorGUI();
+
+     
+        EditorGUILayout.PropertyField(s.FindProperty("controllerSettings"));
+        var e1 = Editor.CreateEditor(controllerSettings);
+        e1.OnInspectorGUI();
+
+        if (GUILayout.Button("start"))
+        {
+            StartRecording();
+        }
+
+        if (GUILayout.Button("stop"))
+        {
+            StopRecording();
+        }
+        s.ApplyModifiedProperties();
+    }
+
+
+    public void Init() 
+    {
+
+        controllerSettings = GetOrCreateAsset<RecorderControllerSettings>("RecorderControllerSettings");
+        m_RecorderController = new RecorderController(controllerSettings);
+
+        m_Settings = GetOrCreateAsset<MovieRecorderSettings>("MovieRecorderSettings");
+        m_Settings.name = "Wwise video Recorder";
+        m_Settings.Enabled = true;
+        m_Settings.Take = 0;
+
+        // Setup Recording
+        controllerSettings.AddRecorderSettings(m_Settings);
+        controllerSettings.SetRecordModeToManual();
+
+    }
+
+
+
+    public static T GetOrCreateAsset<T>(string className) where T : ScriptableObject
+    {
+        var path = System.IO.Path.Combine("Assets", typeof(T).Name + ".asset");
+        var asset = UnityEditor.AssetDatabase.LoadAssetAtPath<T>(path);
+        if (asset)
+            return asset;
+
+        var guids = UnityEditor.AssetDatabase.FindAssets("t:" + typeof(T).Name);
+        foreach (var assetGuid in guids)
+        {
+            var assetPath = UnityEditor.AssetDatabase.GUIDToAssetPath(assetGuid);
+            asset = UnityEditor.AssetDatabase.LoadAssetAtPath<T>(assetPath);
+            if (asset)
+                return asset;
+        }
+
+        asset = ScriptableObject.CreateInstance(className) as T;
+        //AkUtilities.CreateFolder(AkWwiseEditorSettings.WwiseScriptableObjectRelativePath);
+        UnityEditor.AssetDatabase.CreateAsset(asset, path);
+        return asset;
+    }
+
+
+    public void StartRecording() 
+    {
+        Init();
+        RecorderOptions.VerboseMode = false;
+        m_RecorderController.PrepareRecording();
+        m_RecorderController.StartRecording();
+
+        string name = DateTime.Now.ToString().Replace("/", "_");
+        name = name.Replace(":", "_");
+
+        AkSoundEngine.StartOutputCapture("Wwise_Record" + name + ".wav");
+    }
+
+    public void StopRecording()
+    {
+        m_RecorderController.StopRecording();
+        AkSoundEngine.StopOutputCapture();
+
+    }
+
+
+
+}
+#endif

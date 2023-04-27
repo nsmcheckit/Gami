@@ -1,0 +1,51 @@
+﻿using GAMI;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+[RequireComponent(typeof(GAMI.AudioGameObject))]
+[DisallowMultipleComponent()]
+[AddComponentMenu("GAMI/LineSound")]
+public class LineSound : MonoBehaviour
+{
+
+    public AkMultiPositionType positionType = AkMultiPositionType.MultiPositionType_MultiDirections;
+    public List<WwisePositionTemplate> positionList = new List<WwisePositionTemplate>();
+    private AkPositionArray positionArray;
+    public string soundEvent;
+    void Start()
+    {
+        AkSoundEngine.PostEvent(soundEvent, gameObject);
+    }
+
+    
+    void Update()
+    {
+        if (positionType != AkMultiPositionType.MultiPositionType_SingleSource)
+        {
+            BuildAkPositionArray();
+            AkSoundEngine.SetMultiplePositions(gameObject, positionArray, (ushort)positionList.Count, positionType);
+        }
+    }
+
+
+
+ 
+
+    /// <summary>
+    /// 生成多点位置数据
+    /// </summary>
+    /// <returns></returns>
+    private void BuildAkPositionArray()
+    {
+        positionArray = new AkPositionArray((uint)positionList.Count);
+        for (int i = 0; i < positionList.Count; i++)
+        {
+            WwisePositionTemplate temp = positionList[i];
+            positionArray.Add(temp.position + transform.position,
+                Quaternion.Euler(temp.rotation + transform.rotation.eulerAngles) * Vector3.forward,
+                Quaternion.Euler(temp.rotation + transform.rotation.eulerAngles) * Vector3.up);
+        }
+    }
+
+}

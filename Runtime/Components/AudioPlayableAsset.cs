@@ -1,0 +1,32 @@
+﻿using UnityEngine;
+using UnityEngine.Playables;
+
+namespace GAMI
+{
+    //actor
+    [System.Serializable]
+    public class AudioPlayableAsset : PlayableAsset
+    {
+        public string playEvent;
+
+        [Tooltip("是否希望在track结束的时候强制stop可能未播放完成的playEvent")]
+        public bool forceStopAtEndOfTrack = false;
+
+        [Tooltip("在track结束的时候允许播放一个event")]
+        public string eventWhenEndOfTrack;
+
+        public override Playable CreatePlayable(PlayableGraph graph, GameObject owner)
+        {
+            var playable = ScriptPlayable<AudioPlayableBehavioour>.Create(graph);
+
+            AudioPlayableBehavioour b = playable.GetBehaviour();
+            b.playEvent = playEvent;
+            b.eventWhenEndOfTrack = eventWhenEndOfTrack;
+            b.forceStopAtEndOfTrack = forceStopAtEndOfTrack;
+            b.SoundGameObject = owner;
+
+            return playable;
+        }
+    }
+
+}

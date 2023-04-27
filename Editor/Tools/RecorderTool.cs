@@ -1,0 +1,158 @@
+﻿//#define WWISE_SUPPORT_UNITYRECORDER
+
+#if WWISE_SUPPORT_UNITYRECORDER
+using System.Collections;
+using System.Collections.Generic;
+using UnityEditor;
+using UnityEngine;
+using UnityEditor.Recorder;
+using UnityEditor.Recorder.Input;
+using System;
+using System.IO;
+
+public class RecorderTool : EditorWindow
+{
+
+    RecorderController m_RecorderController;
+    public MovieRecorderSettings movie_Settings = null;
+    public RecorderControllerSettings controllerSettings;
+    private SerializedObject s;
+    private Action openFolder = null;
+    private bool isRecorded = false;
+
+
+    [MenuItem("GAMI/Tools/MP4Recorder")]
+    public static void OpenWindow() 
+    {
+        GetWindow<RecorderTool>();
+        
+    }
+
+    public void Awake()
+    {
+        InitConfig();
+        s = new SerializedObject(this);
+
+    }
+
+
+    private Editor Editor_MovieRecorderSettings;
+    private Editor Editor_RecorderControllerSettings;
+
+    private Color _color = Color.white;
+    private void OnGUI()
+    {
+        s.Update();
+
+        GUI.backgroundColor = _color;
+        EditorGUILayout.LabelField("视频格式配置 ::------------------------------------------------------------------------------------------------");
+        EditorGUILayout.PropertyField(s.FindProperty("movie_Settings"));
+        
+        if (Editor_MovieRecorderSettings == null) { Editor_MovieRecorderSettings = Editor.CreateEditor(movie_Settings); }
+        Editor_MovieRecorderSettings.OnInspectorGUI();
+
+        EditorGUILayout.Separator();
+
+        EditorGUILayout.LabelField("录制配置 ::----------------------------------------------------------------------------------------------------");
+        EditorGUILayout.PropertyField(s.FindProperty("controllerSettings"));
+        if (Editor_RecorderControllerSettings == null) { Editor_RecorderControllerSettings = Editor.CreateEditor(controllerSettings); }
+        Editor_RecorderControllerSettings.OnInspectorGUI();
+
+        EditorGUILayout.LabelField("---------------------------------------------------------------------------------------------------------------");
+        if (GUILayout.Button("开始录制"))
+        {
+            StartRecording();
+        }
+
+        if (GUILayout.Button("停止录制"))
+        {
+            StopRecording();
+        }
+        GUI.backgroundColor = Color.white;
+        s.ApplyModifiedProperties();
+    }
+
+
+    public void InitConfig() 
+    {
+        controllerSettings = GetOrCreateAsset<RecorderControllerSettings>("RecorderControllerSettings");
+        m_RecorderController = new RecorderController(controllerSettings);
+
+        movie_Settings = GetOrCreateAsset<MovieRecorderSettings>("MovieRecorderSettings");
+        movie_Settings.name = "Wwise video Recorder";
+        movie_Settings.Enabled = true;
+
+        var folderPath = Path.Combine(Application.dataPath, "..", "WwiseVideoRecordings");
+        if (!Directory.Exists(folderPath)) { Directory.CreateDirectory(folderPath); }
+
+        var mediaOutputFolder = new DirectoryInfo(folderPath);
+
+        movie_Settings.OutputFile = mediaOutputFolder.FullName + "/" + "video" + SoundToolsUtility.GetNowTimeToString();
+        openFolder = null;
+        openFolder += () => { EditorUtility.RevealInFinder(folderPath); };
+        openFolder += () => { EditorUtility.RevealInFinder(AkBasePathGetter.Get().DecodedBankFullPath); };
+        // Setup Recording
+        controllerSettings.AddRecorderSettings(movie_Settings);
+        controllerSettings.SetRecordModeToManual();
+
+    }
+
+    private void OnDestroy()
+    {
+        StopRecording();
+        movie_Settings = null;
+        controllerSettings = null;      
+    }
+
+    public static T GetOrCreateAsset<T>(string className) where T : ScriptableObject
+    {
+        var path = System.IO.Path.Combine("Assets", typeof(T).Name + ".asset");
+        var asset = UnityEditor.AssetDatabase.LoadAssetAtPath<T>(path);
+        if (asset)
+            return asset;
+
+        var guids = UnityEditor.AssetDatabase.FindAssets("t:" + typeof(T).Name);
+        foreach (var assetGuid in guids)
+        {
+            var assetPath = UnityEditor.AssetDatabase.GUIDToAssetPath(assetGuid);
+            asset = UnityEditor.AssetDatabase.LoadAssetAtPath<T>(assetPath);
+            if (asset)
+                return asset;
+        }
+
+        asset = ScriptableObject.CreateInstance(className) as T;
+        AkUtilities.CreateFolder(AkWwiseEditorSettings.WwiseScriptableObjectRelativePath);
+        UnityEditor.AssetDatabase.CreateAsset(asset, path);
+        return asset;
+    }
+
+
+    public void StartRecording() 
+    {
+        if (isRecorded) { return; }
+
+        InitConfig();
+        RecorderOptions.VerboseMode = false;
+        m_RecorderController.PrepareRecording();
+        m_RecorderController.StartRecording();
+
+        AkSoundEngine.StartOutputCapture("Wwise_Record" + SoundToolsUtility.GetNowTimeToString() + ".wav");
+        _color = Color.red;
+        isRecorded = true;
+
+    }
+
+    public void StopRecording()
+    {
+        if (!isRecorded) { return; }
+
+        m_RecorderController.StopRecording();
+        AkSoundEngine.StopOutputCapture();
+        _color = Color.white;
+        openFolder?.Invoke();
+
+        isRecorded = false;
+    }
+
+}
+#endif

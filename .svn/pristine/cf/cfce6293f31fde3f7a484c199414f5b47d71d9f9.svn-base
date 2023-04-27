@@ -1,0 +1,129 @@
+﻿using Codice.CM.Common;
+using GAMI;
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
+using UnityEditor;
+using UnityEngine;
+
+public class SoundToolsUtility
+{
+    /// <summary>
+    /// 从文件夹路径中，获取配置过音频组件的预制体的相关音频配置信息
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="folder"></param>
+    /// <returns></returns>
+    public static List<SoundConfigData<T>> GetSoundComponentsConfigDataInProject<T>(string folder = "Assets") where T : Component, new()
+    {
+        List<SoundConfigData<T>> Tlist = new List<SoundConfigData<T>>();
+        string[] guids = AssetDatabase.FindAssets("t:Prefab", new string[] { folder });
+
+        if (guids != null)
+        {
+            for (int i = 0; i < guids.Length; i++)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                GameObject go = AssetDatabase.LoadAssetAtPath<Object>(path) as GameObject;
+                if (go != null)
+                {
+                    T[] res = go.GetComponentsInChildren<T>(true);
+                    if (res != null)
+                    {
+                        foreach (var item in res)
+                        {
+                            SoundConfigData<T> soundConfigData = new SoundConfigData<T>();
+                            soundConfigData.parentPath = path;
+                            soundConfigData.selfHirarchyPath = GetFullHierarchyPath(item.gameObject, item.gameObject.name);
+                            soundConfigData.audioComponent = item;
+                            Tlist.Add(soundConfigData);
+                        }
+                    }
+                }
+
+            }
+        }
+        return Tlist;
+
+    }
+
+
+    /// <summary>
+    /// 获取物体得层级路径，比如A prefab下面有子级物体B，则路径返回：A/B
+    /// </summary>
+    /// <param name="thisGo"></param>
+    /// <param name="thisGoName"></param>
+    /// <returns></returns>
+    public static string GetFullHierarchyPath(GameObject thisGo, string thisGoName)
+    {
+        while (thisGo.transform.parent != null)
+        {
+            thisGoName = thisGo.transform.parent.name + "/" + thisGoName;
+            return GetFullHierarchyPath(thisGo.transform.parent.gameObject, thisGoName);
+        }
+        return thisGoName;
+    }
+
+    /// <summary>
+    /// 查找父级物体下的子级物体
+    /// </summary>
+    /// <param name="parent"></param>
+    /// <param name="hierarchyPath">eg:”parent/child1/A" 或者 "child1/A" </param>
+    /// <returns></returns>
+    public static Transform GetChildByHierarchyPath(Transform parent, string hierarchyPath)
+    {
+        if (parent != null)
+        {
+            if (hierarchyPath.Equals(parent.name))
+            {
+                return parent.transform;
+            }
+            bool startWithParentName = hierarchyPath.StartsWith(parent.name + "/");
+            return parent.Find(!startWithParentName ? hierarchyPath : hierarchyPath.Remove(0, parent.name.Length + 1));
+        }
+        return parent.transform;
+    }
+
+    /// <summary>
+    /// 获取子级层级最上层的物体
+    /// </summary>
+    /// <param name="child"></param>
+    /// <returns></returns>
+    public static Transform FindTopParent(Transform child) 
+    {
+        Transform t = child.transform;
+        while (child.parent != null)
+        {
+            return FindTopParent(child.parent);
+        }
+        return t;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}

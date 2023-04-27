@@ -1,0 +1,68 @@
+using System;
+using UnityEngine;
+
+namespace GAMI
+{
+    /// <summary>
+    /// 特效prefab、或UI菜单prefab的配置组件
+    /// </summary>
+    [AddComponentMenu("GAMI/EffectSound")]
+    public class EffectSound : MonoBehaviour
+    {
+
+        public SoundParam[] enableEvents;
+        public SoundParam[] disableEvents;
+
+        private void OnEnable()
+        {
+            PostEvents(enableEvents);
+        }
+
+        private void OnDisable()
+        {
+            PostEvents(disableEvents);
+        }
+
+        private void OnDestroy()
+        {
+            StopEvents();
+        }
+
+
+        void PostEvents(SoundParam[] events)
+        {
+            if (AkSoundEngine.IsInitialized())
+            {
+                for (int i = 0; i < events.Length; i++)
+                {
+                    AudioManager.Instance.PlaySound(events[i].audioEvent, GetSoundParamGameObject(events[i]));
+                }
+            }
+        }
+
+        void StopEvents()
+        {
+            if(AkSoundEngine.IsInitialized())
+            {
+                for(int i = 0; i < enableEvents.Length; i++)
+                {
+                    if (enableEvents[i].stopOnDestroy)
+                    {
+                        AudioManager.Instance.StopSound(enableEvents[i].audioEvent,
+                            GetSoundParamGameObject(enableEvents[i]),
+                            (int)(enableEvents[i].fadeOutTime * 1000),
+                            AkCurveInterpolation.AkCurveInterpolation_Linear);
+                    }
+                }
+            }
+        }
+
+
+        private GameObject GetSoundParamGameObject(SoundParam soundParam) 
+        {
+            return soundParam.soundIs2D ? AudioManager.Instance.GlobalAudioGameObject : gameObject;       
+        }
+
+
+    }
+}

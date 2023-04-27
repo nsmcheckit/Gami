@@ -1,0 +1,224 @@
+﻿using Codice.Client.BaseCommands.Differences;
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using Unity.Plastic.Newtonsoft.Json;
+using Unity.Plastic.Newtonsoft.Json.Linq;
+using UnityEditor;
+using UnityEngine;
+
+
+public struct LogWwiseEventItem 
+{
+    public int time;
+    public List<string> names;
+
+}
+public class WwisePlaybacker : EditorWindow
+{
+
+
+    enum PlayBackeState
+    {
+        Record,
+        CompleteRecord,
+        Play,
+        Pause,
+        Resume,
+        Stop,
+
+    }
+
+    PlayBackeState playBackerState;
+
+    private static List<string> logItemJsonList = new List<string>(); //日志条目json收集缓存列表
+    static List<LogWwiseEventItem> ItemListForPlay = new List<LogWwiseEventItem>();
+
+
+    [MenuItem("GAMI/Tools/Playbacker")]
+    public static void ShowWindow()
+    {
+        WwisePlaybacker wwisePlaybacker = GetWindow<WwisePlaybacker>();
+        wwisePlaybacker.Show();
+    }
+
+
+    private void Awake()
+    {
+
+    }
+
+
+    Color color = Color.white;
+    bool isStartRecording = false;
+    string playPauseButtonIcon = "d_Animation.Play";
+
+    private void OnGUI()
+    {
+        GUI.contentColor = Color.green;
+        EditorGUILayout.LabelField(new GUIContent(playBackerState.ToString()), EditorStyles.centeredGreyMiniLabel, GUILayout.Height(66f));
+        GUI.contentColor = Color.white;
+
+        GUI.backgroundColor = color;
+
+        EditorGUILayout.BeginHorizontal();
+        if (GUILayout.Button(EditorGUIUtility.IconContent("d_Animation.Record")))
+        {
+            isStartRecording = !isStartRecording;
+            color = isStartRecording ? Color.red : Color.white;
+            if (!isStartRecording)
+            {
+                StopWwiseEventCapture();
+            }
+
+            this.ShowNotification(new GUIContent(playBackerState.ToString()));
+
+            playBackerState = PlayBackeState.Record;
+
+        }
+        if (GUILayout.Button(EditorGUIUtility.IconContent("d_Animation.FirstKey")))
+        {
+
+        }
+        if (GUILayout.Button(EditorGUIUtility.IconContent("d_Animation.PrevKey")))
+        {
+
+        }
+        if (GUILayout.Button(EditorGUIUtility.IconContent(playPauseButtonIcon)))
+        {
+            playPauseButtonIcon = playPauseButtonIcon.Equals("d_Animation.Play") ? "d_PauseButton" : "d_Animation.Play";
+            playBackerState = playBackerState == PlayBackeState.Play ? PlayBackeState.Pause : PlayBackeState.Play;
+
+
+
+
+        }
+        if (GUILayout.Button(EditorGUIUtility.IconContent("d_Animation.NextKey")))
+        {
+            Debug.Log(logItemJsonList.Count);
+            Debug.Log(suscribeId);
+        }
+        if (GUILayout.Button(EditorGUIUtility.IconContent("d_Animation.LastKey")))
+        {
+            StartWwiseEventCapture();
+
+        }
+        EditorGUILayout.EndHorizontal();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        //a =GUI.Slider(new Rect(new Vector2(0, 100), new Vector2(1000, 1000)), 
+        //    a, 0, 0, 100, EditorStyles.miniButton, EditorStyles.miniButton, true, 0);
+
+
+
+
+
+        GUI.backgroundColor = color;
+
+    }
+
+    public int lastTime = 0;
+    public uint suscribeId = 0;
+    public void StartWwiseEventCapture()
+    {
+        WaapiManager.OnCaptureLogItemAdded(new string[] { Profiler_Log_Item_Type.Event },
+            (string json) =>
+            {
+                Debug.Log(json);
+                logItemJsonList.Add(json);  
+
+
+
+            },(uint id) => 
+            {
+                suscribeId = id;              
+            }
+            );
+    }
+
+    public void StopWwiseEventCapture()
+    {
+        ItemListForPlay = GenerateLogItemListFromJsonList(logItemJsonList);
+    }
+
+
+    public void Play()
+    {
+
+    }
+
+    public void Pause() 
+    {
+    
+    }
+
+
+    public void Resume() 
+    {
+    
+    }
+
+    public void Stop() 
+    {
+    
+    }
+
+
+    public void BuildEventRelativeTime() 
+    {
+    
+    }
+
+    public List<LogWwiseEventItem> GenerateLogItemListFromJsonList(List<string> resultList) 
+    {
+        List<LogWwiseEventItem> logItemList = new List<LogWwiseEventItem>();
+        
+        for (int i = 0; i < resultList.Count; i++) 
+        {
+            WaapiManager.LogItem item = JsonUtility.FromJson<WaapiManager.LogItem>(resultList[i]);
+            int logItemtime = item.time;
+            string LogObjName = item.objectName;
+            Debug.LogError(LogObjName);
+            if (logItemtime > lastTime)
+            {
+                LogWwiseEventItem logWwiseEventItem = new LogWwiseEventItem();
+                logWwiseEventItem.time = logItemtime;
+                logWwiseEventItem.names = new List<string>();
+                logWwiseEventItem.names.Add(LogObjName);
+
+                ItemListForPlay.Add(logWwiseEventItem);
+                lastTime = logItemtime;
+            }
+            else if (logItemtime == lastTime)
+            {
+                LogWwiseEventItem lastItem = ItemListForPlay.FindLast((LogWwiseEventItem lastIt) => { return lastIt.time == lastTime; });
+                lastItem.names.Add(LogObjName);
+            }
+            EditorUtility.DisplayProgressBar("wait", "生成中……", i / resultList.Count);
+
+        }
+        EditorUtility.ClearProgressBar();
+        return logItemList;
+    }
+
+
+
+}

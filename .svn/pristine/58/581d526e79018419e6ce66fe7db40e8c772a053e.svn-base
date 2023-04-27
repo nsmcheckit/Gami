@@ -1,0 +1,42 @@
+using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.EventSystems;
+using AK.Wwise;
+
+namespace GAMI
+{
+    /// <summary>
+    /// 用于设置rtpc
+    /// </summary>
+    [AddComponentMenu("GAMI/SliderSound")]
+    public class SliderSound : MonoBehaviour
+    {
+        public string RTPCName;
+        public string[] audioEvents;
+
+        void Start()
+        {
+            Slider s = this.gameObject.GetComponent<Slider>();
+            if (s != null)
+            {
+                s.onValueChanged.AddListener(x =>
+                {
+                    AkSoundEngine.SetRTPCValue(RTPCName, x);    
+                    PlaySound(audioEvents);
+                
+                });
+            }
+        }
+        void PlaySound(string[] events)
+        {
+            if (AkSoundEngine.IsInitialized())
+            {
+                for (int i = 0; i < events.Length; i++)
+                {
+                    AudioManager.Instance.PlaySound2D(events[i]);
+                }
+            }
+        }
+    }   
+}
+

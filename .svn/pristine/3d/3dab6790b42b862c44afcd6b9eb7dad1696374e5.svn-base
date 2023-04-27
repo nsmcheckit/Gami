@@ -1,0 +1,108 @@
+﻿using GAMI;
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using UnityEditor;
+using UnityEngine;
+
+public class GamiCommonTools
+{
+
+    /// <summary>
+    /// 通用函数
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    public static void ExportAllSoundComponentsToJson<T>() where T : Component, new ()
+    {
+        var list_SoundConfigData = SoundToolsUtility.GetSoundComponentsConfigDataInProject<T>();
+        string json = SoundToolsUtility.ConvertListToJson(list_SoundConfigData);
+        string filePath = Application.persistentDataPath + "/" + typeof(T).Name + SoundToolsUtility.GetNowTimeToString() + ".json";
+        File.WriteAllText(filePath, json, System.Text.Encoding.UTF8);
+        if (File.Exists(filePath))
+        {
+            EditorUtility.RevealInFinder(filePath);
+        }
+    }
+
+    [MenuItem("GAMI/配置信息/ButtonSound/导出")]
+    public static void ExportButtonSound() 
+    {
+        ExportAllSoundComponentsToJson<ButtonSound>();   
+    }
+
+    [MenuItem("GAMI/配置信息/ButtonSound/导入")]
+    public static void ImportButtonSound()
+    {
+        
+    }
+
+
+
+    [MenuItem("GAMI/配置信息/ToggleSound/导出")]
+    public static void ExportToggleSound()
+    {
+        ExportAllSoundComponentsToJson<ToggleSound>();
+    }
+
+    [MenuItem("GAMI/配置信息/ToggleSound/导入")]
+    public static void ImportToggleSound()
+    {
+        
+    }
+
+    [MenuItem("GAMI/配置信息/EffectSound/导出")]
+    public static void ExportEffectSound()
+    {
+        ExportAllSoundComponentsToJson<EffectSound>();
+    }
+
+
+    [MenuItem("GAMI/配置信息/EffectSound/导入")]
+    public static void ImportEffectSound()
+    {
+        
+    }
+
+
+
+    [MenuItem("GAMI/配置信息/SliderSound/导出")]
+    public static void ExportSliderSound()
+    {
+        ExportAllSoundComponentsToJson<SliderSound>();
+    }
+
+
+    [MenuItem("GAMI/配置信息/SliderSound/导入")]
+    public static void ImportSliderSound()
+    {
+        
+    }
+
+
+
+    [MenuItem("GAMI/配置信息/LoadBanks/导出")]
+    public static void ExportLoadBanks()
+    {
+        ExportAllSoundComponentsToJson<LoadBanks>();
+    }
+
+
+    [MenuItem("GAMI/配置信息/LoadBanks/导入")]
+    public static void ImportLoadBanks()
+    {
+        
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+}

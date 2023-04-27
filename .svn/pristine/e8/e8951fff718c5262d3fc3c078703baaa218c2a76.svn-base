@@ -1,0 +1,22 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEditor;
+using UnityEngine;
+
+public class WwisePlaybacker : EditorWindow
+{
+
+
+    [MenuItem("GAMI/Tools/Playbacker")]
+    public static void ShowWindow() 
+    {
+        WwisePlaybacker wwisePlaybacker = GetWindow<WwisePlaybacker>();
+        wwisePlaybacker.Show(); 
+    }
+
+    private void OnGUI()
+    {
+        AkWaapiUtilities.QueueCommandWithReturnType
+    }
+
+}

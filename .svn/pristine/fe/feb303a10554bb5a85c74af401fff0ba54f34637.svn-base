@@ -1,0 +1,66 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace GAMI 
+{
+    [AddComponentMenu("GAMI/LoadBanks")]
+    public class LoadBanks : MonoBehaviour
+    {
+
+        public string[] banksToLoad;
+
+        private void OnEnable()
+        {
+            LoadBank(banksToLoad);
+        }
+
+
+        private void OnDisable()
+        {
+            UnLoadBank(banksToLoad);
+        }
+
+        private void OnDestroy()
+        {
+
+        }
+
+
+
+        private void LoadBank(string[] banks)
+        {
+            if (banks == null) { return; }
+            for (int i = 0; i < banks.Length; i++)
+            {
+                if (!string.IsNullOrEmpty(banks[i]))
+                {
+                    AkBankManager.LoadBank(banks[i], false, false);
+                }
+
+            }
+
+        }
+
+        private void UnLoadBank(string[] banks)
+        {
+            for (int i = 0; i < banks.Length; i++)
+            {
+                if (!string.IsNullOrEmpty(banks[i]))
+                {
+                    AkBankManager.UnloadBank(banks[i]);
+                }
+            }
+        }
+
+
+
+
+
+    }
+
+
+
+
+}
+
